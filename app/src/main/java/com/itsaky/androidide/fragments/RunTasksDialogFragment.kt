@@ -19,8 +19,10 @@ package com.itsaky.androidide.fragments
 
 import android.app.Dialog
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
+import android.util.DisplayMetrics
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -43,18 +45,19 @@ import com.itsaky.androidide.databinding.LayoutRunTaskBinding
 import com.itsaky.androidide.databinding.LayoutRunTaskDialogBinding
 import com.itsaky.androidide.lookup.Lookup
 import com.itsaky.androidide.models.Checkable
-import com.itsaky.androidide.projects.ProjectManager
+import com.itsaky.androidide.projects.IProjectManager
+import com.itsaky.androidide.projects.api.GradleProject
 import com.itsaky.androidide.projects.builder.BuildService
 import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.tasks.executeAsync
-import com.itsaky.androidide.tooling.api.model.GradleTask
-import com.itsaky.androidide.utils.ILogger
+import com.itsaky.androidide.tooling.api.models.GradleTask
 import com.itsaky.androidide.utils.SingleTextWatcher
 import com.itsaky.androidide.utils.doOnApplyWindowInsets
 import com.itsaky.androidide.utils.flashError
 import com.itsaky.androidide.utils.flashInfo
 import com.itsaky.androidide.utils.updateSystemBarColors
 import com.itsaky.androidide.viewmodel.RunTasksViewModel
+import org.slf4j.LoggerFactory
 
 /**
  * A bottom sheet dialog fragment to show UI which allows the users to select and execute Gradle
@@ -68,9 +71,9 @@ class RunTasksDialogFragment : BottomSheetDialogFragment() {
   private lateinit var run: LayoutRunTaskBinding
   private val viewModel: RunTasksViewModel by viewModels()
 
-  private val log = ILogger.newInstance("RunTasksDialogFragment")
-
   companion object {
+    private val log = LoggerFactory.getLogger(RunTasksDialogFragment::class.java)
+
     private const val CHILD_LOADING = 0
     private const val CHILD_TASKS = 1
     private const val CHILD_CONFIRMATION = 2
@@ -83,7 +86,7 @@ class RunTasksDialogFragment : BottomSheetDialogFragment() {
   }
 
   override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-    return object : BottomSheetDialog(requireContext(), theme) {
+    val dialog = object : BottomSheetDialog(requireContext(), theme) {
       override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         window?.apply {
@@ -104,6 +107,8 @@ class RunTasksDialogFragment : BottomSheetDialogFragment() {
         }
       }
     }
+    dialog.behavior.peekHeight = (getWindowHeight() * 0.7).toInt()
+    return dialog
   }
 
   override fun onCreateView(
@@ -179,11 +184,14 @@ class RunTasksDialogFragment : BottomSheetDialogFragment() {
     viewModel.displayedChild = CHILD_LOADING
 
     executeAsync({
-      val rootProject =
-        ProjectManager.rootProject ?: return@executeAsync emptyList<Checkable<GradleTask>>()
-      val tasks = rootProject.tasks.map { Checkable(false, it) }.toMutableList()
-      tasks.addAll(rootProject.subModules.flatMap { it.tasks }.map { Checkable(false, it) })
-      return@executeAsync tasks
+      val project = IProjectManager.getInstance().rootProject
+        ?: return@executeAsync emptyList<Checkable<GradleTask>>()
+
+      return@executeAsync project.subProjects
+        .flatMap<GradleProject, GradleTask> { it.tasks }
+        .map<GradleTask, Checkable<GradleTask>> {
+          Checkable<GradleTask>(false, it)
+        }
     }) { tasks ->
       viewModel.tasks = tasks ?: emptyList()
       viewModel.displayedChild =
@@ -199,5 +207,16 @@ class RunTasksDialogFragment : BottomSheetDialogFragment() {
 
       run.tasks.adapter = RunTasksListAdapter(viewModel.tasks, onCheckChanged)
     }
+  }
+
+  private fun getWindowHeight(): Int {
+    val height = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      activity?.windowManager?.currentWindowMetrics?.bounds?.height()!!
+    } else {
+      val displayMetrics = DisplayMetrics()
+      activity?.windowManager?.defaultDisplay?.getMetrics(displayMetrics)
+      displayMetrics.heightPixels
+    }
+    return height
   }
 }

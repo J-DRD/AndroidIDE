@@ -21,9 +21,16 @@ plugins {
     id("com.vanniktech.maven.publish.base")
 }
 
+description = "AndroidIDE Logging Framework"
+
 dependencies {
     compileOnly(projects.subprojects.frameworkStubs)
-    
+
+    api(libs.logging.logback.core)
+    api(libs.logging.logback.classic)
+
+    implementation(projects.buildInfo)
+
     testImplementation(libs.tests.junit)
     testImplementation(libs.tests.google.truth)
 }

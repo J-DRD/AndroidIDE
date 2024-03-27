@@ -41,11 +41,12 @@ import com.itsaky.androidide.lsp.xml.utils.XmlUtils.NodeType
 import com.itsaky.androidide.lsp.xml.utils.XmlUtils.NodeType.ATTRIBUTE
 import com.itsaky.androidide.lsp.xml.utils.XmlUtils.NodeType.ATTRIBUTE_VALUE
 import com.itsaky.androidide.utils.DocumentUtils
-import com.itsaky.androidide.utils.ILogger
 import com.itsaky.androidide.xml.resources.ResourceTableRegistry
 import org.eclipse.lemminx.dom.DOMAttr
 import org.eclipse.lemminx.dom.DOMDocument
 import org.eclipse.lemminx.dom.DOMNode
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 /**
  * Base class for all XML completion providers.
@@ -53,13 +54,15 @@ import org.eclipse.lemminx.dom.DOMNode
  * @author Akash Yadav
  */
 abstract class IXmlCompletionProvider(private val provider: ICompletionProvider) {
-
-  protected val log: ILogger = ILogger.newInstance("XmlCompletionProvider")
+  
   protected lateinit var nodeAtCursor: DOMNode
   protected lateinit var attrAtCursor: DOMAttr
   protected lateinit var allNamespaces: Set<Pair<String, String>>
 
   companion object {
+    @JvmStatic
+    protected val log: Logger = LoggerFactory.getLogger(IXmlCompletionProvider::class.java)
+    
     const val NAMESPACE_PREFIX = "http://schemas.android.com/apk/res/"
     const val NAMESPACE_AUTO = "http://schemas.android.com/apk/res-auto"
   }
@@ -139,12 +142,12 @@ abstract class IXmlCompletionProvider(private val provider: ICompletionProvider)
     simpleName: String,
     qualifiedName: String,
     matchLevel: MatchLevel,
-    isPlatformWidget : Boolean = false
+    isPlatformWidget: Boolean = false
   ): CompletionItem =
     CompletionItem().apply {
-      this.label = simpleName
+      this.ideLabel = simpleName
       this.detail = qualifiedName
-      this.ideSortText = label.toString()
+      this.ideSortText = ideLabel
       this.insertText = if (isPlatformWidget) simpleName else qualifiedName
       this.insertTextFormat = PLAIN_TEXT
       this.editHandler = TagEditHandler()
@@ -164,6 +167,7 @@ abstract class IXmlCompletionProvider(private val provider: ICompletionProvider)
     partial: String,
     resPkg: String,
     nsPrefix: String,
+    hasNamespace: Boolean,
     matchLevel: MatchLevel
   ): CompletionItem =
     CompletionItem().apply {
@@ -175,13 +179,14 @@ abstract class IXmlCompletionProvider(private val provider: ICompletionProvider)
       }
 
       val title = "$prefix${attr.name.entry!!}"
-      this.label = title
+      val insertText = if (hasNamespace) attr.name.entry!! else title
+      this.ideLabel = title
       this.completionKind = FIELD
       this.detail = "From package '$resPkg'"
-      this.insertText = "$title=\"$0\""
+      this.insertText = "$insertText=\"$0\""
       this.insertTextFormat = SNIPPET
       this.snippetDescription = describeSnippet(partial)
-      this.ideSortText = label.toString()
+      this.ideSortText = ideLabel
       this.matchLevel = matchLevel
       this.command = Command("Trigger completion request", Command.TRIGGER_COMPLETION)
     }
@@ -212,7 +217,7 @@ abstract class IXmlCompletionProvider(private val provider: ICompletionProvider)
 
     val text = sb.toString()
     return CompletionItem().apply {
-      this.label = text
+      this.ideLabel = text
       this.detail = "From package '$pck'"
       this.completionKind = VALUE
       this.overrideTypeText = type.uppercase()
@@ -237,7 +242,7 @@ abstract class IXmlCompletionProvider(private val provider: ICompletionProvider)
     matchLevel: MatchLevel
   ): CompletionItem {
     return CompletionItem().apply {
-      this.label = name
+      this.ideLabel = name
       this.detail = if (pck.isBlank()) "" else "From package '$pck'"
       this.completionKind = VALUE
       this.ideSortText = "000$name"
@@ -257,7 +262,7 @@ abstract class IXmlCompletionProvider(private val provider: ICompletionProvider)
 
     val pck = nsUri.substringAfter(NAMESPACE_PREFIX)
     if (pck.isBlank()) {
-      log.warn("Invalid namespace: $nsUri")
+      log.warn("Invalid namespace: {}", nsUri)
       return emptySet()
     }
 

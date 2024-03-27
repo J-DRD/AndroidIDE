@@ -26,7 +26,8 @@
     },
     "string": {
       "fg": "@string",
-      "completion": false
+      "completion": false,
+      "maybeHexColor": true
     },
     "variable.builtin": {
       "fg": "@keyword",
@@ -48,7 +49,7 @@
     "variable": "@onSurface",
     "constant.builtin": "@keyword",
     "type": "@type",
-    "attribute": "@type",
+    "attribute": "@attribute",
     "function.declaration": "@func.decl",
     "function.invocation": "@func.call",
     "variable.field": "@field",

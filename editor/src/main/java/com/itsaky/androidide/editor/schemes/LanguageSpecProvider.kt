@@ -25,9 +25,10 @@ import com.itsaky.androidide.editor.language.treesitter.predicates.MatchPredicat
 import com.itsaky.androidide.editor.language.treesitter.predicates.NotEqualPredicate
 import com.itsaky.androidide.editor.language.treesitter.predicates.NotMatchPredicate
 import com.itsaky.androidide.treesitter.TSLanguage
-import com.itsaky.androidide.utils.ILogger
 import io.github.rosemoe.sora.editor.ts.LocalsCaptureSpec
 import io.github.rosemoe.sora.editor.ts.TsLanguageSpec
+import org.slf4j.LoggerFactory
+import java.io.FileNotFoundException
 
 /**
  * Provides language spec instances for tree sitter languages.
@@ -37,7 +38,7 @@ import io.github.rosemoe.sora.editor.ts.TsLanguageSpec
 object LanguageSpecProvider {
 
   private const val BASE_SPEC_PATH = "editor/treesitter"
-  private val log = ILogger.newInstance("LanguageSpecProvider")
+  private val log = LoggerFactory.getLogger(LanguageSpecProvider::class.java)
 
   @JvmStatic
   @JvmOverloads
@@ -56,7 +57,13 @@ object LanguageSpecProvider {
         bracketsScmSource = readScheme(context, type, "brackets"),
         localsCaptureSpec = localsCaptureSpec,
         predicates =
-          listOf(MatchPredicate, NotMatchPredicate, EqualPredicate, NotEqualPredicate, AnyOfPredicate)
+        listOf(
+          MatchPredicate,
+          NotMatchPredicate,
+          EqualPredicate,
+          NotEqualPredicate,
+          AnyOfPredicate
+        )
       )
     return TreeSitterLanguageSpec(
       spec = editorLangSpec,
@@ -68,8 +75,9 @@ object LanguageSpecProvider {
     return try {
       context.assets.open("${BASE_SPEC_PATH}/${type}/${name}.scm").reader().readText()
     } catch (e: Exception) {
-      if (type != "log" || name == "highlights") {
-        log.warn("Scheme file '$name' for type '$type' not found")
+      if (e !is FileNotFoundException) {
+        // log everything except FileNotFoundException
+        log.error("Failed to read scheme file {} for type {}", name, type, e)
       }
       ""
     }

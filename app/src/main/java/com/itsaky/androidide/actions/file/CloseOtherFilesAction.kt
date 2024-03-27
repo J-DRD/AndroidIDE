@@ -19,18 +19,18 @@ package com.itsaky.androidide.actions.file
 
 import android.content.Context
 import androidx.core.content.ContextCompat
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
 import com.itsaky.androidide.R
 import com.itsaky.androidide.actions.ActionData
+import com.itsaky.androidide.activities.editor.EditorHandlerActivity
 
 /**
  * Closes all opened files except the selected one.
  *
  * @author Akash Yadav
  */
-class CloseOtherFilesAction(context: Context) : FileTabAction() {
+class CloseOtherFilesAction(context: Context, override val order: Int) : FileTabAction() {
 
-  override val id: String = "ide.editor.closeOtherFiles"
+  override val id: String = "ide.editor.fileTab.close.others"
 
   init {
     label = context.getString(R.string.action_closeOthers)

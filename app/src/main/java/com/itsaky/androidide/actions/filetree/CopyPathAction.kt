@@ -29,12 +29,12 @@ import com.itsaky.androidide.utils.flashSuccess
  *
  * @author Akash Yadav
  */
-class CopyPathAction(context: Context) :
+class CopyPathAction(context: Context, override val order: Int) :
   BaseFileTreeAction(context, labelRes = R.string.copy_path, iconRes = R.drawable.ic_copy) {
 
   override val id: String = "ide.editor.fileTree.copyPath"
 
-  override fun execAction(data: ActionData) {
+  override suspend fun execAction(data: ActionData) {
     val file = data.requireFile()
     ClipboardUtils.copyText("[AndroidIDE] Copied File Path", file.absolutePath)
     flashSuccess(R.string.copied)

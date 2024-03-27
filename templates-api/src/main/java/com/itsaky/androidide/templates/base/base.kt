@@ -17,7 +17,9 @@
 
 package com.itsaky.androidide.templates.base
 
+import com.itsaky.androidide.templates.BooleanParameter
 import com.itsaky.androidide.templates.CheckBoxWidget
+import com.itsaky.androidide.templates.EnumParameter
 import com.itsaky.androidide.templates.FileTemplate
 import com.itsaky.androidide.templates.FileTemplateRecipeResult
 import com.itsaky.androidide.templates.Language
@@ -26,7 +28,6 @@ import com.itsaky.androidide.templates.ModuleTemplateData
 import com.itsaky.androidide.templates.ModuleType
 import com.itsaky.androidide.templates.ModuleType.AndroidApp
 import com.itsaky.androidide.templates.ModuleType.AndroidLibrary
-import com.itsaky.androidide.templates.ModuleVersionData
 import com.itsaky.androidide.templates.ParameterConstraint.DIRECTORY
 import com.itsaky.androidide.templates.ParameterConstraint.EXISTS
 import com.itsaky.androidide.templates.ParameterConstraint.MODULE_NAME
@@ -37,7 +38,9 @@ import com.itsaky.androidide.templates.ProjectVersionData
 import com.itsaky.androidide.templates.R
 import com.itsaky.androidide.templates.Sdk
 import com.itsaky.androidide.templates.SpinnerWidget
+import com.itsaky.androidide.templates.StringParameter
 import com.itsaky.androidide.templates.TextFieldWidget
+import com.itsaky.androidide.templates.base.util.getNewProjectName
 import com.itsaky.androidide.templates.base.util.moduleNameToDir
 import com.itsaky.androidide.templates.enumParameter
 import com.itsaky.androidide.templates.minSdkParameter
@@ -57,21 +60,15 @@ typealias AndroidModuleTemplateConfigurator = AndroidModuleTemplateBuilder.() ->
  *
  * @param block Function to configure the template.
  */
-fun baseProject(sdkFilter: ((Sdk) -> Boolean)? = null,
-                languageFilter: ((Language) -> Boolean)? = null,
-                projectVersionData: ProjectVersionData = ProjectVersionData(),
-                block: ProjectTemplateBuilder.() -> Unit
+inline fun baseProject(projectName: StringParameter = projectNameParameter(),
+  packageName: StringParameter = packageNameParameter(),
+  useKts: BooleanParameter = useKtsParameter(),
+  minSdk: EnumParameter<Sdk> = minSdkParameter(),
+  language: EnumParameter<Language> = projectLanguageParameter(),
+  projectVersionData: ProjectVersionData = ProjectVersionData(),
+  crossinline block: ProjectTemplateBuilder.() -> Unit
 ): ProjectTemplate {
   return ProjectTemplateBuilder().apply {
-    val projectName = projectNameParameter()
-    val packageName = packageNameParameter()
-    val useKts = useKtsParameter()
-    val minSdk = minSdkParameter {
-      filter = sdkFilter
-    }
-    val language = projectLanguageParameter {
-      filter = languageFilter
-    }
 
     // When project name is changed, change the package name accordingly
     projectName.observe { name ->
@@ -80,11 +77,17 @@ fun baseProject(sdkFilter: ((Sdk) -> Boolean)? = null,
       packageName.setValue(newPackage)
     }
 
+    Environment.mkdirIfNotExits(Environment.PROJECTS_DIR)
+
     val saveLocation = stringParameter {
       name = R.string.wizard_save_location
       default = Environment.PROJECTS_DIR.absolutePath
-      endIcon = R.drawable.ic_folder
+      endIcon = { R.drawable.ic_folder }
       constraints = listOf(NONEMPTY, DIRECTORY, EXISTS)
+    }
+
+    projectName.doBeforeCreateView {
+      it.setValue(getNewProjectName(saveLocation.value, projectName.value))
     }
 
     widgets(TextFieldWidget(projectName), TextFieldWidget(packageName),
@@ -130,6 +133,9 @@ fun baseProject(sdkFilter: ((Sdk) -> Boolean)? = null,
       // gradle/wrapper/gradle-wrapper.jar
       // gradle/wrapper/gradle-wrapper.properties
       gradleWrapper()
+
+      // .gitignore
+      gitignore()
     }
 
     block()
@@ -142,8 +148,8 @@ fun baseProject(sdkFilter: ((Sdk) -> Boolean)? = null,
  *
  * @param block The module configurator.
  */
-fun baseAndroidModule(isLibrary: Boolean = false,
-                      block: AndroidModuleTemplateConfigurator
+inline fun baseAndroidModule(isLibrary: Boolean = false,
+  crossinline block: AndroidModuleTemplateConfigurator
 ): ModuleTemplate {
   return AndroidModuleTemplateBuilder().apply {
 
@@ -162,7 +168,7 @@ fun baseAndroidModule(isLibrary: Boolean = false,
     val type = enumParameter<ModuleType> {
       name = R.string.wizard_module_type
       default = AndroidLibrary
-      startIcon = R.drawable.ic_android
+      startIcon = { R.drawable.ic_android }
       displayName = ModuleType::typeName
     }
 
@@ -195,8 +201,8 @@ fun baseAndroidModule(isLibrary: Boolean = false,
  * @param configurator The configurator to configure the template.
  * @return The [FileTemplate].
  */
-fun <R : FileTemplateRecipeResult> baseFile(dir: File,
-                                            configurator: FileTemplateBuilder<R>.() -> Unit
+inline fun <R : FileTemplateRecipeResult> baseFile(dir: File,
+  crossinline configurator: FileTemplateBuilder<R>.() -> Unit
 ): FileTemplate<R> {
   return FileTemplateBuilder<R>(dir).apply(configurator)
     .build() as FileTemplate<R>

@@ -30,6 +30,7 @@ import com.itsaky.androidide.templates.EnumParameter
 import com.itsaky.androidide.templates.ITemplateWidgetViewProvider
 import com.itsaky.androidide.templates.Parameter
 import com.itsaky.androidide.templates.Parameter.DefaultObserver
+import com.itsaky.androidide.templates.ParameterWidget
 import com.itsaky.androidide.templates.SpinnerWidget
 import com.itsaky.androidide.templates.StringParameter
 import com.itsaky.androidide.templates.TextFieldParameter
@@ -66,12 +67,23 @@ class TemplateWidgetViewProviderImpl : ITemplateWidgetViewProvider {
     }
   }
 
-  override fun createView(context: Context, widget: Widget<*>): View {
+  override fun <T> createView(context: Context, widget: Widget<T>): View {
+    if (widget is ParameterWidget<T>) {
+      widget.parameter.apply {
+        beforeCreateView()
+        setValue(value, false)
+      }
+    }
+
     return when (widget) {
       is TextFieldWidget -> createTextField(context, widget)
       is CheckBoxWidget -> createCheckBox(context, widget)
       is SpinnerWidget -> createSpinner(context, widget)
       else -> throw IllegalArgumentException("Unknown widget type : $widget")
+    }.also {
+      if (widget is ParameterWidget<T>) {
+        widget.parameter.afterCreateView()
+      }
     }
   }
 
@@ -79,7 +91,7 @@ class TemplateWidgetViewProviderImpl : ITemplateWidgetViewProvider {
     return LayoutCheckboxBinding.inflate(LayoutInflater.from(context)).apply {
       val param = widget.parameter as BooleanParameter
       root.setText(param.name)
-      root.isChecked = param.default
+      root.isChecked = param.value
 
       val observer = object : DefaultObserver<Boolean>() {
         override fun onChanged(parameter: Parameter<Boolean>) {
@@ -113,6 +125,7 @@ class TemplateWidgetViewProviderImpl : ITemplateWidgetViewProvider {
       param.configureTextField(context, root) { value ->
         observer.disableAndRun {
           param.setValue(value)
+          param.resetStartAndEndIcons(root.context, root)
         }
 
         val err =
@@ -125,7 +138,7 @@ class TemplateWidgetViewProviderImpl : ITemplateWidgetViewProvider {
 
       }
 
-      input.setText(param.default)
+      input.setText(param.value)
       param.observe(observer)
 
     }.root
@@ -137,7 +150,7 @@ class TemplateWidgetViewProviderImpl : ITemplateWidgetViewProvider {
 
       val nameToEnum = mutableMapOf<String, Enum<*>>()
       val enumToName = mutableMapOf<Enum<*>, String>()
-      param.default.javaClass.enumConstants?.forEach {
+      param.value.javaClass.enumConstants?.forEach {
 
         // remove the elements for which the filter fails
         if (param.filter?.invoke(it) == false) {
@@ -174,12 +187,6 @@ class TemplateWidgetViewProviderImpl : ITemplateWidgetViewProvider {
         }
       }
 
-      param.configureTextField(context, root) {
-        observer.disableAndRun {
-          param.setValue(nameToEnum[it] ?: param.default)
-        }
-      }
-
       if (param.default != nameToEnum[defaultName]) {
         // the default value may have been filtered
         // reset the value to the first item
@@ -188,30 +195,23 @@ class TemplateWidgetViewProviderImpl : ITemplateWidgetViewProvider {
         param.setValue(first)
       }
 
+      param.configureTextField(context, root) {
+        observer.disableAndRun {
+          param.setValue(nameToEnum[it] ?: param.default)
+          param.resetStartAndEndIcons(root.context, root)
+        }
+      }
+
       param.observe(observer)
     }.root
   }
 
-  private fun TextFieldParameter<*>.configureTextField(context: Context,
+  private inline fun TextFieldParameter<*>.configureTextField(context: Context,
                                                        root: TextInputLayout,
-                                                       onTextChanged: (String) -> Unit = {}
+                                                       crossinline onTextChanged: (String) -> Unit = {}
   ) {
     root.setHint(name)
-
-    startIcon?.let {
-      root.startIconDrawable = ContextCompat.getDrawable(context, it)
-      onStartIconClick?.let { onClick ->
-        root.setStartIconOnClickListener { onClick() }
-      }
-    }
-
-    endIcon?.let {
-      root.endIconDrawable = ContextCompat.getDrawable(context, it)
-      onEndIconClick?.let { onClick ->
-        root.setEndIconOnClickListener { onClick() }
-      }
-    }
-
+    resetStartAndEndIcons(context, root)
     root.editText!!.addTextChangedListener(object : SingleTextWatcher() {
       override fun onTextChanged(s: CharSequence?, start: Int, before: Int,
                                  count: Int
@@ -219,5 +219,19 @@ class TemplateWidgetViewProviderImpl : ITemplateWidgetViewProvider {
         onTextChanged(s?.toString() ?: "")
       }
     })
+  }
+
+  private fun <T> TextFieldParameter<T>.resetStartAndEndIcons(context: Context,
+                                                          root: TextInputLayout
+  ) {
+    startIcon?.let {
+      root.startIconDrawable = ContextCompat.getDrawable(context, it(this))
+      onStartIconClick?.let(root::setStartIconOnClickListener)
+    }
+
+    endIcon?.let {
+      root.endIconDrawable = ContextCompat.getDrawable(context, it(this))
+      onEndIconClick?.let(root::setEndIconOnClickListener)
+    }
   }
 }

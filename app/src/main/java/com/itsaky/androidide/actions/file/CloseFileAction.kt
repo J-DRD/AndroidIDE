@@ -19,18 +19,18 @@ package com.itsaky.androidide.actions.file
 
 import android.content.Context
 import androidx.core.content.ContextCompat
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
 import com.itsaky.androidide.R
 import com.itsaky.androidide.actions.ActionData
+import com.itsaky.androidide.activities.editor.EditorHandlerActivity
 
 /**
  * Closes the current file.
  *
  * @author Akash Yadav
  */
-class CloseFileAction(context: Context) : FileTabAction() {
+class CloseFileAction(context: Context, override val order: Int) : FileTabAction() {
 
-  override val id: String = "ide.editor.closeFile"
+  override val id: String = "ide.editor.fileTab.close.current"
 
   init {
     label = context.getString(R.string.action_closeThis)
@@ -38,7 +38,11 @@ class CloseFileAction(context: Context) : FileTabAction() {
   }
 
   override fun EditorHandlerActivity.doAction(data: ActionData): Boolean {
-    binding.tabs.selectedTabPosition.let { closeFile(it) }
+    binding.tabs.selectedTabPosition.let { index ->
+      closeFile(index) {
+        invalidateOptionsMenu()
+      }
+    }
     return true
   }
 }

@@ -18,9 +18,7 @@
 package com.itsaky.androidide.lsp.java.providers;
 
 import android.text.TextUtils;
-
 import androidx.annotation.NonNull;
-
 import com.itsaky.androidide.lsp.api.IServerSettings;
 import com.itsaky.androidide.lsp.java.compiler.JavaCompilerService;
 import com.itsaky.androidide.lsp.java.compiler.SynchronizedTask;
@@ -33,30 +31,33 @@ import com.itsaky.androidide.lsp.models.DefinitionParams;
 import com.itsaky.androidide.lsp.models.DefinitionResult;
 import com.itsaky.androidide.models.Location;
 import com.itsaky.androidide.models.Position;
+import com.itsaky.androidide.progress.ICancelChecker;
 import com.itsaky.androidide.utils.DocumentUtils;
-import com.itsaky.androidide.utils.ILogger;
-
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-
 import jdkx.lang.model.element.Element;
 import jdkx.lang.model.element.TypeElement;
 import jdkx.lang.model.type.TypeKind;
 import jdkx.tools.JavaFileObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class DefinitionProvider {
+public class DefinitionProvider extends CancelableServiceProvider {
+
   public static final List<Location> NOT_SUPPORTED = Collections.emptyList();
-  private static final ILogger LOG = ILogger.newInstance("JavaDefinitionProvider");
+  private static final Logger LOG = LoggerFactory.getLogger(DefinitionProvider.class);
   private final JavaCompilerService compiler;
   private final IServerSettings settings;
   private Path file;
   private Position position;
   private int line, column;
 
-  public DefinitionProvider(JavaCompilerService compiler, IServerSettings settings) {
+  public DefinitionProvider(JavaCompilerService compiler, IServerSettings settings,
+      ICancelChecker cancelChecker) {
+    super(cancelChecker);
     this.compiler = compiler;
     this.settings = settings;
   }
@@ -71,47 +72,49 @@ public class DefinitionProvider {
     this.position = new Position(this.line, this.column);
     final List<Location> locations = findDefinition();
 
-    LOG.debug("Found", locations.size(), "definitions...");
+    LOG.debug("Found {} definitions...", locations.size());
     return new DefinitionResult(locations);
   }
 
   public List<Location> findDefinition() {
+    abortIfCancelled();
     final SynchronizedTask compile = compiler.compile(file);
+    abortIfCancelled();
     final Element element =
-        compile.get(task -> NavigationHelper.findElement(task, file, line, column));
+        compile.get(task -> NavigationHelper.findElement(task, file, line, column, this));
 
     if (element == null) {
-      LOG.error("Cannot find element at line:", line, "and column:", column);
+      LOG.error("Cannot find element at line: {} and column: {}", line, column);
       return NOT_SUPPORTED;
     }
 
     IJavaDefinitionProvider provider = null;
 
     if (element.asType().getKind() == TypeKind.ERROR) {
-      provider = new ErroneousDefinitionProvider(position, file, compiler, settings);
+      provider = new ErroneousDefinitionProvider(position, file, compiler, settings, this);
     } else if (NavigationHelper.isLocal(element)) {
-      provider = new LocalDefinitionProvider(position, file, compiler, settings);
+      provider = new LocalDefinitionProvider(position, file, compiler, settings, this);
     }
 
     if (provider == null) {
       final String className = className(element);
       if (TextUtils.isEmpty(className)) {
-        LOG.error("No class name found for element:", element);
+        LOG.error("No class name found for element: {}", element);
         return NOT_SUPPORTED;
       }
 
       final Optional<JavaFileObject> optional = compiler.findAnywhere(className);
       if (!optional.isPresent()) {
-        LOG.error("Cannot find source file for class:", className);
+        LOG.error("Cannot find source file for class: {}", className);
         return NOT_SUPPORTED;
       }
 
       final JavaFileObject jfo = optional.get();
       if (DocumentUtils.isSameFile(Paths.get(jfo.toUri()), file)) {
-        provider = new LocalDefinitionProvider(position, file, compiler, settings);
+        provider = new LocalDefinitionProvider(position, file, compiler, settings, this);
       } else {
         provider =
-            new RemoteDefinitionProvider(position, file, compiler, settings).setOtherFile(jfo);
+            new RemoteDefinitionProvider(position, file, compiler, settings, this).setOtherFile(jfo);
       }
     }
 
@@ -120,6 +123,7 @@ public class DefinitionProvider {
 
   private String className(Element element) {
     while (element != null) {
+      abortIfCancelled();
       if (element instanceof TypeElement) {
         TypeElement type = (TypeElement) element;
         return type.getQualifiedName().toString();

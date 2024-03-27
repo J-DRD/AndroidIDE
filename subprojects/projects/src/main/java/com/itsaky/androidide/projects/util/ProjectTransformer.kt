@@ -17,18 +17,20 @@
 
 package com.itsaky.androidide.projects.util
 
-import com.android.builder.model.v2.ide.ProjectType.LIBRARY
-import com.itsaky.androidide.builder.model.DefaultViewBindingOptions
 import com.itsaky.androidide.projects.api.AndroidModule
+import com.itsaky.androidide.projects.api.GradleProject
 import com.itsaky.androidide.projects.api.JavaModule
 import com.itsaky.androidide.projects.api.Project
+import com.itsaky.androidide.tooling.api.IAndroidProject
+import com.itsaky.androidide.tooling.api.IGradleProject
+import com.itsaky.androidide.tooling.api.IJavaProject
 import com.itsaky.androidide.tooling.api.IProject
-import com.itsaky.androidide.tooling.api.IProject.Type.Android
-import com.itsaky.androidide.tooling.api.IProject.Type.Gradle
-import com.itsaky.androidide.tooling.api.IProject.Type.Java
-import com.itsaky.androidide.tooling.api.IProject.Type.Unknown
-import com.itsaky.androidide.tooling.api.messages.result.SimpleModuleData
-import com.itsaky.androidide.utils.ILogger
+import com.itsaky.androidide.tooling.api.ProjectType
+import com.itsaky.androidide.tooling.api.models.AndroidProjectMetadata
+import com.itsaky.androidide.tooling.api.models.BasicProjectMetadata
+import com.itsaky.androidide.tooling.api.models.JavaProjectMetadata
+import com.itsaky.androidide.tooling.api.models.params.StringParameter
+import org.slf4j.LoggerFactory
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -38,23 +40,29 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 class ProjectTransformer {
 
-  private val log = ILogger.newInstance(javaClass.simpleName)
+  companion object {
+    private val log = LoggerFactory.getLogger(ProjectTransformer::class.java)
+  }
 
   fun transform(project: IProject): Project? {
     try {
-      val path = project.projectPath.get()
-      return Project(
-        name = project.name.get(),
-        description = project.description.get() ?: "",
-        path = path,
-        projectDir = project.projectDir.get(),
-        buildDir = project.buildDir.get(),
-        buildScript = project.buildScript.get(),
+      val allProjects = project.getProjects().get()
+      val selectionResult = project.selectProject(StringParameter("")).get()
+      check(selectionResult.isSuccessful) {
+        "Cannot find root project"
+      }
 
-        // As these lists will never change, we could make these thread-safe with
-        // CopyOnWriteArrayList
-        tasks = CopyOnWriteArrayList(project.tasks.get() ?: listOf()),
-        subModules = CopyOnWriteArrayList(transform(project.listModules().get(), project))
+      val rootProject = when (project.getType().get()) {
+        ProjectType.Gradle -> transform(project.asGradleProject())
+        ProjectType.Android -> transform(project.asAndroidProject())
+        else -> throw IllegalStateException(
+          "Root project must be either an Android project or a Gradle project")
+      }
+
+      return Project(
+        rootProject,
+        CopyOnWriteArrayList(transform(allProjects, project)),
+        project.getProjectSyncIssues().get()
       )
     } catch (error: Throwable) {
       log.error("Unable to transform project", error)
@@ -62,71 +70,95 @@ class ProjectTransformer {
     }
   }
 
+  private fun transform(rootProject: IGradleProject): GradleProject {
+    val metadata = rootProject.getMetadata().get()
+    return GradleProject(
+      name = metadata.name ?: IProject.PROJECT_UNKNOWN,
+      description = metadata.description ?: "",
+      path = metadata.projectPath,
+      projectDir = metadata.projectDir,
+      buildDir = metadata.buildDir,
+      buildScript = metadata.buildScript,
+
+      // The list will never change, we could make these thread-safe with
+      // CopyOnWriteArrayList
+      tasks = CopyOnWriteArrayList(rootProject.getTasks().get() ?: listOf()),
+    )
+  }
+
   private fun transform(
-    project: com.itsaky.androidide.tooling.api.model.AndroidModule
+    project: IAndroidProject
   ): AndroidModule {
+    val metadata = project.getMetadata().get() as AndroidProjectMetadata
+    val libraryMap = project.getLibraryMap().get()
+    val variants = project.getVariants().get()
+    val configuredVariant = project.getConfiguredVariant().get()
     return AndroidModule(
-      name = project.name,
-      description = project.description ?: "",
-      path = project.projectPath,
-      projectDir = project.projectDir,
-      buildDir = project.buildDir,
-      buildScript = project.buildScript,
-      tasks = project.tasks,
-      packageName = project.packageName,
-      resourcePrefix = project.resourcePrefix,
-      namespace = project.namespace,
-      androidTestNamespace = project.androidTestNamespace,
-      testFixtureNamespace = project.testFixturesNamespace,
-      projectType = project.projectType ?: LIBRARY,
-      mainSourceSet = project.mainSourceSet,
-      flags = project.flags,
-      javaCompileOptions = project.javaCompileOptions,
-      viewBindingOptions = project.viewBindingOptions ?: DefaultViewBindingOptions(),
-      bootClassPaths = project.bootClassPaths,
-      libraries = project.libraries,
-      libraryMap = project.libraryMap,
-      dynamicFeatures = project.dynamicFeatures,
-      lintCheckJars = project.lintChecksJars,
-      modelSyncFiles = project.modelSyncFiles,
-      variants = project.simpleVariants
+      name = metadata.name ?: IProject.PROJECT_UNKNOWN,
+      description = metadata.description ?: "",
+      path = metadata.projectPath,
+      projectDir = metadata.projectDir,
+      buildDir = metadata.buildDir,
+      buildScript = metadata.buildScript,
+      tasks = project.getTasks().get(),
+      resourcePrefix = metadata.resourcePrefix,
+      namespace = metadata.namespace,
+      androidTestNamespace = metadata.androidTestNamespace,
+      testFixtureNamespace = metadata.testFixtureNamespace,
+      projectType = metadata.androidType,
+      mainSourceSet = project.getMainSourceSet().get(),
+      flags = metadata.flags,
+      compilerSettings = metadata.javaCompileOptions,
+      viewBindingOptions = metadata.viewBindingOptions,
+      bootClassPaths = project.getBootClasspaths().get(),
+      libraries = libraryMap.keys,
+      libraryMap = libraryMap,
+      lintCheckJars = project.getLintCheckJars().get(),
+      variants = variants,
+      configuredVariant = variants.find { it.name == configuredVariant },
+      classesJar = metadata.classesJar
     )
   }
 
-  private fun transform(project: com.itsaky.androidide.tooling.api.model.JavaModule): JavaModule {
+  private fun transform(project: IJavaProject): JavaModule {
+    val metadata = project.getMetadata().get() as JavaProjectMetadata
     return JavaModule(
-      name = project.name,
-      description = project.description ?: "",
-      path = project.projectPath,
-      projectDir = project.projectDir,
-      buildDir = project.buildDir,
-      buildScript = project.buildScript,
-      tasks = project.tasks,
-      contentRoots = project.contentRoots,
-      dependencies = project.javaDependencies,
-      compilerSettings = project.compilerSettings
+      name = metadata.name ?: IProject.PROJECT_UNKNOWN,
+      description = metadata.description ?: "",
+      path = metadata.projectPath,
+      projectDir = metadata.projectDir,
+      buildDir = metadata.buildDir,
+      buildScript = metadata.buildScript,
+      tasks = project.getTasks().get(),
+      contentRoots = project.getContentRoots().get(),
+      dependencies = project.getDependencies().get(),
+      compilerSettings = metadata.compilerSettings,
+      classesJar = metadata.classesJar
     )
   }
 
-  private fun transform(modules: MutableList<SimpleModuleData>, root: IProject): List<Project> {
-    return mutableListOf<Project>().apply {
+  private fun transform(modules: List<BasicProjectMetadata>, root: IProject): List<GradleProject> {
+    return mutableListOf<GradleProject>().apply {
       for (module in modules) {
         add(createProject(module, root))
       }
     }
   }
 
-  private fun createProject(module: SimpleModuleData, root: IProject): Project {
-    val project =
-      root.findByPath(module.path).get()
-        ?: throw java.lang.IllegalStateException("Invalid module data")
-    val type = project.type.get() ?: throw java.lang.IllegalStateException("Invalid module data")
+  private fun createProject(moduleMetadata: BasicProjectMetadata, root: IProject): GradleProject {
+    val selectionResult = root.selectProject(StringParameter(moduleMetadata.projectPath)).get()
+    check(selectionResult.isSuccessful) {
+      "Selection failed for project '${moduleMetadata.projectPath}' but it is included in all projects."
+    }
+
+    val type = root.getType().get() ?: throw java.lang.IllegalStateException("Invalid module data")
 
     return when (type) {
-      Gradle,
-      Unknown -> transform(project)!!
-      Android -> transform(project as com.itsaky.androidide.tooling.api.model.AndroidModule)
-      Java -> transform(project as com.itsaky.androidide.tooling.api.model.JavaModule)
+      ProjectType.Gradle,
+      ProjectType.Unknown -> transform(root.asGradleProject())
+
+      ProjectType.Android -> transform(root.asAndroidProject())
+      ProjectType.Java -> transform(root.asJavaProject())
     }
   }
 }

@@ -19,10 +19,13 @@ package com.itsaky.androidide.utils
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.core.app.ShareCompat
 import androidx.core.content.FileProvider
 import com.blankj.utilcode.util.ImageUtils
 import com.blankj.utilcode.util.ImageUtils.ImageType.TYPE_UNKNOWN
+import com.itsaky.androidide.R
 import java.io.File
 
 /**
@@ -32,11 +35,13 @@ import java.io.File
  */
 object IntentUtils {
 
+  private const val RESULT_LAUNCH_APP_INTENT_SENDER = 223
+
   @JvmStatic
   fun openImage(context: Context, file: File) {
     imageIntent(context = context, file = file, intentAction = Intent.ACTION_VIEW)
   }
-  
+
   @JvmStatic
   @JvmOverloads
   fun imageIntent(
@@ -82,5 +87,60 @@ object IntentUtils {
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 
     context.startActivity(Intent.createChooser(intent, null))
+  }
+
+  /**
+   * Launch the application with the given [package name][packageName].
+   *
+   * @param context The context that will be used to fetch the launch intent.
+   * @param packageName The package name of the application.
+   */
+  @JvmOverloads
+  fun launchApp(context: Context, packageName: String, logError: Boolean = true) : Boolean {
+    if (Build.VERSION.SDK_INT >= 33) {
+      return launchAppApi33(context, packageName, logError)
+    }
+
+    return doLaunchApp(context, packageName, logError)
+  }
+
+  private fun doLaunchApp(context: Context, packageName: String, logError: Boolean = true) : Boolean {
+    try {
+      val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
+      if (launchIntent == null) {
+        flashError(R.string.msg_app_launch_failed)
+        return false
+      }
+
+      context.startActivity(launchIntent)
+      return true
+    } catch (e: Throwable) {
+      flashError(R.string.msg_app_launch_failed)
+      if (logError) {
+        ILogger.ROOT.error("Failed to launch application with package name '{}'", packageName, e)
+      }
+      return false
+    }
+  }
+
+  @RequiresApi(33)
+  private fun launchAppApi33(context: Context, packageName: String, logError: Boolean = true) : Boolean {
+    return try {
+      val sender = context.packageManager.getLaunchIntentSenderForPackage(packageName)
+      sender.sendIntent(
+        context,
+        RESULT_LAUNCH_APP_INTENT_SENDER,
+        null,
+        null,
+        null
+      )
+      true
+    } catch (e: Throwable) {
+      flashError(R.string.msg_app_launch_failed)
+      if (logError) {
+        ILogger.ROOT.error("Failed to launch app", e)
+      }
+      false
+    }
   }
 }

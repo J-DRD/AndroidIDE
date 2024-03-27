@@ -17,8 +17,8 @@
 
 package com.itsaky.androidide.actions
 
-import com.itsaky.androidide.ui.editor.CodeEditorView
 import com.itsaky.androidide.editor.ui.IDEEditor
+import com.itsaky.androidide.ui.CodeEditorView
 
 /** @author Akash Yadav */
 abstract class EditorRelatedAction : EditorActivityAction(), EditorActionItem {
@@ -26,8 +26,10 @@ abstract class EditorRelatedAction : EditorActivityAction(), EditorActionItem {
   override var requiresUIThread: Boolean = true
 
   override fun prepare(data: ActionData) {
+    super<EditorActionItem>.prepare(data)
+    super<EditorActivityAction>.prepare(data)
     val editor =
-      getEditor(data)
+      data.getEditor()
         ?: run {
           visible = false
           enabled = false
@@ -40,7 +42,8 @@ abstract class EditorRelatedAction : EditorActivityAction(), EditorActionItem {
     enabled = visible
   }
 
-  fun getEditor(data: ActionData): IDEEditor? = data.get(IDEEditor::class.java)
+  fun ActionData.getEditor(): IDEEditor? = get(IDEEditor::class.java)
 
-  fun getEditorView(data: ActionData): CodeEditorView? = data[CodeEditorView::class.java]
+  fun ActionData.getEditorView(): CodeEditorView? = get(CodeEditorView::class.java)
+
 }

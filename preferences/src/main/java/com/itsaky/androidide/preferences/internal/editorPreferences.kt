@@ -37,6 +37,8 @@ const val USE_SOFT_TAB = "idepref_editor_useSoftTab"
 const val USE_CUSTOM_FONT = "idepref_editor_useCustomFont"
 const val DELETE_EMPTY_LINES = "idepref_editor_deleteEmptyLines"
 const val DELETE_TABS_ON_BACKSPACE = "idepref_editor_deleteTab"
+const val STICKY_SCROLL_ENABLED = "idepref_editor_stickyScrollEnabled"
+const val PIN_LINE_NUMBERS = "idepref_editor_pinLineNumbers"
 
 const val COLOR_SCHEME = "idepref_editor_colorScheme"
 const val DEFAULT_COLOR_SCHEME = "default"
@@ -143,14 +145,24 @@ var colorScheme: String
     prefManager.putString(COLOR_SCHEME, value)
   }
 
-var deleteEmptyLines : Boolean
+var deleteEmptyLines: Boolean
   get() = prefManager.getBoolean(DELETE_EMPTY_LINES, true)
   set(value) {
     prefManager.putBoolean(DELETE_EMPTY_LINES, value)
   }
 
-var deleteTabsOnBackspace : Boolean
+var deleteTabsOnBackspace: Boolean
   get() = prefManager.getBoolean(DELETE_TABS_ON_BACKSPACE, true)
   set(value) {
     prefManager.putBoolean(DELETE_TABS_ON_BACKSPACE, value)
   }
+
+var stickyScrollEnabled: Boolean
+  get() = prefManager.getBoolean(STICKY_SCROLL_ENABLED, false)
+  set(value) {
+    prefManager.putBoolean(STICKY_SCROLL_ENABLED, value)
+  }
+
+var pinLineNumbers: Boolean
+  get() = prefManager.getBoolean(PIN_LINE_NUMBERS, true)
+  set(value) = prefManager.putBoolean(PIN_LINE_NUMBERS, value)

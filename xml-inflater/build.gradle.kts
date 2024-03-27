@@ -15,7 +15,7 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-@file:Suppress("UnstableApiUsage")
+import com.itsaky.androidide.build.config.BuildConfig
 
 plugins {
   id("com.android.library")
@@ -41,9 +41,5 @@ dependencies {
   implementation(projects.resources)
 
   testImplementation(projects.subprojects.projects)
-  testImplementation(projects.subprojects.toolingApiTesting)
-  testImplementation(projects.shared)
-  testImplementation(libs.tests.junit)
-  testImplementation(libs.tests.google.truth)
-  testImplementation(libs.tests.robolectric)
+  testImplementation(projects.testing.tooling)
 }

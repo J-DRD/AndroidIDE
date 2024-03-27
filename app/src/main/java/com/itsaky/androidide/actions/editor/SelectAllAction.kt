@@ -22,7 +22,7 @@ import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.BaseEditorAction
 
 /** @author Akash Yadav */
-class SelectAllAction(context: Context) : BaseEditorAction() {
+class SelectAllAction(context: Context, override val order: Int) : BaseEditorAction() {
 
   init {
     label = context.getString(android.R.string.selectAll)
@@ -32,9 +32,9 @@ class SelectAllAction(context: Context) : BaseEditorAction() {
     arr.recycle()
   }
 
-  override val id: String = "ideEditor_selectAll"
+  override val id: String = "ide.editor.code.text.selectAll"
 
-  override fun execAction(data: ActionData): Boolean {
+  override suspend fun execAction(data: ActionData): Boolean {
     val editor = getEditor(data) ?: return false
     editor.selectAll()
     return true

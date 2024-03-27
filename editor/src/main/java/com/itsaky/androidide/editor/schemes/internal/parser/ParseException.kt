@@ -24,5 +24,7 @@ import com.google.gson.JsonParseException
  *
  * @author Akash Yadav
  */
-class ParseException(msg: String?) : JsonParseException(msg) {
-}
+class ParseException @JvmOverloads constructor(
+  msg: String?,
+  cause: Throwable? = null
+) : JsonParseException(msg, cause)

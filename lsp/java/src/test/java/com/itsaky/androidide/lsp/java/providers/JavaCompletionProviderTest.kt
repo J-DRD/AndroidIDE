@@ -19,10 +19,15 @@ package com.itsaky.androidide.lsp.java.providers
 import com.google.common.truth.Truth.assertThat
 import com.itsaky.androidide.lsp.java.JavaLSPTest
 import com.itsaky.androidide.lsp.models.CompletionParams
+import com.itsaky.androidide.models.Position
+import com.itsaky.androidide.progress.ICancelChecker
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
 /** @author Akash Yadav */
+@RunWith(RobolectricTestRunner::class)
 class JavaCompletionProviderTest {
 
   @Before
@@ -79,10 +84,11 @@ class JavaCompletionProviderTest {
     }
   }
 
-  private fun completionTitles(pos: com.itsaky.androidide.models.Position): List<CharSequence> {
+  private fun completionTitles(pos: Position): List<CharSequence> {
     return JavaLSPTest.server
-      .complete(CompletionParams(pos, JavaLSPTest.file!!).apply { prefix = "" })
+      .complete(
+        CompletionParams(pos, JavaLSPTest.file!!, ICancelChecker.NOOP).apply { prefix = "" })
       .items
-      .map { it.label }
+      .map { it.ideLabel }
   }
 }

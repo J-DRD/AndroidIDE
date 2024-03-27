@@ -5,25 +5,18 @@
       <profile name="Gradle Imported" enabled="true">
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="false">
-          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.auto.value/auto-value/1.10.1/e0184c26c3a20257c6fb46eaea16fdd3d7b6d357/auto-value-1.10.1.jar" />
-        </processorPath>
-        <module name="AndroidIDE.subprojects.google-java-format.main" />
-      </profile>
-      <profile name="Gradle Imported" enabled="true">
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="false">
-          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.auto.service/auto-service/1.0.1/c9779f7372192a96c957a3df1faeeabd07881085/auto-service-1.0.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.auto.service/auto-service/1.1.1/bfeb4c40087b49e23700f074807d3f2a6d36d2d1/auto-service-1.1.1.jar" />
           <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/net.ltgt.gradle.incap/incap-processor/1.0.0/ddec950483eefb2a5cca0736f5967fccbfdb7d2d/incap-processor-1.0.0.jar" />
-          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.auto.service/auto-service-annotations/1.0.1/ac86dacc0eb9285ea9d42eee6aad8629ca3a7432/auto-service-annotations-1.0.1.jar" />
-          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.auto/auto-common/1.2/ca270191fd7d2a7297da7c8f29184206df10c67d/auto-common-1.2.jar" />
-          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.guava/guava/31.0.1-jre/119ea2b2bc205b138974d351777b20f02b92704b/guava-31.0.1-jre.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.auto.service/auto-service-annotations/1.1.1/da12a15cd058ba90a0ff55357fb521161af4736d/auto-service-annotations-1.1.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.auto/auto-common/1.2.1/f6da26895f759010f5f170c8044e84c1b17ef83e/auto-common-1.2.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.guava/guava/32.0.1-jre/6e5d51a72d142f2d40a57dfb897188b36a95b489/guava-32.0.1-jre.jar" />
           <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/net.ltgt.gradle.incap/incap/1.0.0/4d765e5b0e3ee542b57ccffbb9c147c280290207/incap-1.0.0.jar" />
           <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.guava/failureaccess/1.0.1/1dcf1de382a0bf95a3d8b0849546c88bac1292c9/failureaccess-1.0.1.jar" />
           <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/b421526c5f297295adef1c886e5246c39d4ac629/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar" />
           <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.code.findbugs/jsr305/3.0.2/25ea2e8b0c338a877313bd4672d3fe056ea78f0d/jsr305-3.0.2.jar" />
-          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.checkerframework/checker-qual/3.12.0/d5692f0526415fcc6de94bb5bfbd3afd9dd3b3e5/checker-qual-3.12.0.jar" />
-          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.errorprone/error_prone_annotations/2.7.1/458d9042f7aa6fa9a634df902b37f544e15aacac/error_prone_annotations-2.7.1.jar" />
-          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.j2objc/j2objc-annotations/1.3/ba035118bc8bac37d7eff77700720999acd9986d/j2objc-annotations-1.3.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.checkerframework/checker-qual/3.33.0/de2b60b62da487644fc11f734e73c8b0b431238f/checker-qual-3.33.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.errorprone/error_prone_annotations/2.18.0/89b684257096f548fa39a7df9fdaa409d4d4df91/error_prone_annotations-2.18.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.j2objc/j2objc-annotations/2.8/c85270e307e7b822f1086b93689124b89768e273/j2objc-annotations-2.8.jar" />
         </processorPath>
         <module name="AndroidIDE.annotation-processors.main" />
       </profile>
@@ -109,6 +102,7 @@
       <module name="AndroidIDE.colorschemes" target="11" />
       <module name="AndroidIDE.colorschemes.main" target="11" />
       <module name="AndroidIDE.editor-languages" target="11" />
+      <module name="AndroidIDE.emulatorview" target="17" />
       <module name="AndroidIDE.google-java-format" target="1.8" />
       <module name="AndroidIDE.gradle-tooling" target="1.8" />
       <module name="AndroidIDE.gradle-tooling.plugin" target="1.8" />
@@ -116,19 +110,111 @@
       <module name="AndroidIDE.ksp-processor" target="11" />
       <module name="AndroidIDE.ksp-processor.main" target="11" />
       <module name="AndroidIDE.ksp-processor.test" target="11" />
+      <module name="AndroidIDE.lsp.testing" target="17" />
       <module name="AndroidIDE.sdk-info" target="11" />
+      <module name="AndroidIDE.subprojects.appintro" target="17" />
+      <module name="AndroidIDE.subprojects.classfile" target="11" />
+      <module name="AndroidIDE.subprojects.classfile.main" target="11" />
+      <module name="AndroidIDE.subprojects.classfile.test" target="11" />
+      <module name="AndroidIDE.subprojects.fuzzysearch" target="11" />
+      <module name="AndroidIDE.subprojects.fuzzysearch.main" target="11" />
+      <module name="AndroidIDE.subprojects.fuzzysearch.test" target="11" />
+      <module name="AndroidIDE.subprojects.google-java-format" target="17" />
+      <module name="AndroidIDE.subprojects.google-java-format.test" target="11" />
       <module name="AndroidIDE.subprojects.java-compiler-utils.main" target="8" />
       <module name="AndroidIDE.subprojects.java-compiler-utils.test" target="8" />
-      <module name="AndroidIDE.subprojects.jsonrpc" target="11" />
-      <module name="AndroidIDE.subprojects.jsonrpc.main" target="11" />
-      <module name="AndroidIDE.subprojects.jsonrpc.test" target="11" />
+      <module name="AndroidIDE.subprojects.javac" target="11" />
+      <module name="AndroidIDE.subprojects.javac.main" target="11" />
+      <module name="AndroidIDE.subprojects.javac.test" target="11" />
+      <module name="AndroidIDE.subprojects.javapoet" target="17" />
+      <module name="AndroidIDE.subprojects.javapoet.main" target="17" />
+      <module name="AndroidIDE.subprojects.javapoet.test" target="17" />
+      <module name="AndroidIDE.subprojects.jdk-jdeps" target="11" />
+      <module name="AndroidIDE.subprojects.jdk-jdeps.main" target="11" />
+      <module name="AndroidIDE.subprojects.jdk-jdeps.test" target="11" />
+      <module name="AndroidIDE.subprojects.jdt" target="11" />
+      <module name="AndroidIDE.subprojects.jdt.main" target="11" />
+      <module name="AndroidIDE.subprojects.jdt.test" target="11" />
+      <module name="AndroidIDE.subprojects.layoutlib-api" target="17" />
+      <module name="AndroidIDE.subprojects.tooling-api-config" target="11" />
+      <module name="AndroidIDE.subprojects.tooling-api-config.main" target="11" />
+      <module name="AndroidIDE.subprojects.tooling-api-config.test" target="11" />
+      <module name="AndroidIDE.subprojects.tooling-api-model2" target="11" />
+      <module name="AndroidIDE.subprojects.tooling-api-model2.main" target="11" />
+      <module name="AndroidIDE.subprojects.tooling-api-model2.test" target="11" />
+      <module name="AndroidIDE.subprojects.tooling-api-testing" target="11" />
+      <module name="AndroidIDE.subprojects.tooling-api-testing.main" target="11" />
+      <module name="AndroidIDE.subprojects.tooling-api-testing.test" target="11" />
       <module name="AndroidIDE.subprojects.xml-formatter.main" target="11" />
       <module name="AndroidIDE.subprojects.xml-formatter.test" target="11" />
       <module name="AndroidIDE.templates-testing" target="17" />
       <module name="AndroidIDE.templates-testing.main" target="11" />
       <module name="AndroidIDE.templates-testing.test" target="11" />
       <module name="AndroidIDE.testing-android" target="17" />
+      <module name="AndroidIDE.testing.android.test" target="11" />
+      <module name="AndroidIDE.testing.tooling-api" target="11" />
+      <module name="AndroidIDE.testing.tooling-api.main" target="11" />
+      <module name="AndroidIDE.testing.tooling-api.test" target="11" />
+      <module name="AndroidIDE.testing.unit.test" target="11" />
       <module name="AndroidIDE.treesitter.test" target="1.7" />
+      <module name="ATS.android-tree-sitter" target="17" />
+      <module name="ATS.app" target="17" />
+      <module name="ATS.tree-sitter-aidl" target="17" />
+      <module name="ATS.tree-sitter-java" target="17" />
+      <module name="ATS.tree-sitter-json" target="17" />
+      <module name="ATS.tree-sitter-kotlin" target="17" />
+      <module name="ATS.tree-sitter-log" target="17" />
+      <module name="ATS.tree-sitter-python" target="17" />
+      <module name="ATS.tree-sitter-xml" target="17" />
+      <module name="build-deps.appintro" target="17" />
+      <module name="build-deps.desugaring-core" target="11" />
+      <module name="build-deps.desugaring-core.main" target="11" />
+      <module name="build-deps.desugaring-core.test" target="11" />
+      <module name="build-deps.fuzzysearch" target="17" />
+      <module name="build-deps.fuzzysearch.main" target="17" />
+      <module name="build-deps.fuzzysearch.test" target="17" />
+      <module name="build-deps.google-java-format" target="17" />
+      <module name="build-deps.javac" target="17" />
+      <module name="build-deps.javac.main" target="17" />
+      <module name="build-deps.javac.test" target="17" />
+      <module name="build-deps.javapoet" target="17" />
+      <module name="build-deps.javapoet.main" target="17" />
+      <module name="build-deps.javapoet.test" target="17" />
+      <module name="build-deps.jdk-jdeps" target="17" />
+      <module name="build-deps.jdk-jdeps.main" target="17" />
+      <module name="build-deps.jdk-jdeps.test" target="17" />
+      <module name="build-deps.jdt" target="17" />
+      <module name="build-deps.jdt.main" target="17" />
+      <module name="build-deps.jdt.test" target="17" />
+      <module name="build-deps.layoutlib-api" target="17" />
+      <module name="build-deps.layoutlib-api.main" target="17" />
+      <module name="build-deps.layoutlib-api.test" target="17" />
+      <module name="build-logic.ats" target="17" />
+      <module name="build-logic.ats.main" target="17" />
+      <module name="build-logic.ats.test" target="17" />
+      <module name="build-logic.common" target="17" />
+      <module name="build-logic.common.main" target="17" />
+      <module name="build-logic.common.test" target="17" />
+      <module name="build-logic.desugaring" target="17" />
+      <module name="build-logic.desugaring-core" target="11" />
+      <module name="build-logic.desugaring-core.main" target="11" />
+      <module name="build-logic.desugaring-core.test" target="11" />
+      <module name="build-logic.desugaring.main" target="17" />
+      <module name="build-logic.desugaring.test" target="17" />
+      <module name="build-logic.ide" target="17" />
+      <module name="build-logic.ide.main" target="17" />
+      <module name="build-logic.ide.test" target="17" />
+      <module name="build-logic.plugins" target="17" />
+      <module name="build-logic.plugins.main" target="17" />
+      <module name="build-logic.plugins.test" target="17" />
+      <module name="build-logic.properties-parser" target="17" />
+      <module name="build-logic.properties-parser.main" target="17" />
+      <module name="build-logic.properties-parser.test" target="17" />
+      <module name="composite-builds.build-logic.desugaring-core.main" target="11" />
+      <module name="composite-builds.build-logic.desugaring-core.test" target="11" />
+      <module name="composite-builds.plugins" target="17" />
+      <module name="composite-builds.plugins.main" target="17" />
+      <module name="composite-builds.plugins.test" target="17" />
     </bytecodeTargetLevel>
   </component>
 </project>

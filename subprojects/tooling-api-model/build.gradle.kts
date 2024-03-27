@@ -14,32 +14,32 @@
  *  You should have received a copy of the GNU General Public License
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 @Suppress("JavaPluginLanguageLevel")
 plugins {
-    id ("java-library")
-    id ("org.jetbrains.kotlin.jvm")
+  id ("java-library")
+  id ("org.jetbrains.kotlin.jvm")
 }
 
 dependencies {
-    implementation(projects.logger)
-    
-    api(projects.subprojects.xmlDom)
-    api(projects.subprojects.builderModelImpl)
-    api(libs.common.jsonrpc)  
-  
-    implementation(libs.common.jkotlin)
+  implementation(projects.logger)
+
+  api(projects.subprojects.xmlDom)
+  api(projects.subprojects.builderModelImpl)
+  api(libs.common.jsonrpc)
+
+  implementation(libs.common.jkotlin)
 }
 
 tasks.register < Copy > ("copyToTestDir") {
-    from ("${project.buildDir.absolutePath}/libs/tooling-api-model.jar")
-    into ("${project.rootProject.file ("tests/test-home/.androidide/init").absolutePath}/")
-    rename { "model.jar" }
-    
-    outputs.upToDateWhen { false }
+  from (project.layout.buildDirectory.file("libs/tooling-api-model.jar"))
+  into (project.rootProject.mkdir ("tests/test-home/.androidide/init"))
+  rename { "model.jar" }
+
+  outputs.upToDateWhen { false }
 }
 
 project.tasks.jar {
-    finalizedBy ("copyToTestDir")
-    outputs.upToDateWhen { false }
+  finalizedBy ("copyToTestDir")
+  outputs.upToDateWhen { false }
 }

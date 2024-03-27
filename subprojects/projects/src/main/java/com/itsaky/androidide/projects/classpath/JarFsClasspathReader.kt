@@ -67,6 +67,10 @@ class JarFsClasspathReader : IClasspathReader {
 
               name = name.substringBeforeLast(".class")
 
+              if (name.isBlank()) {
+                return CONTINUE
+              }
+
               if (name.startsWith('/')) {
                 name = name.substring(1)
               }
@@ -75,7 +79,9 @@ class JarFsClasspathReader : IClasspathReader {
                 name = name.replace('/', '.')
               }
 
-              builder.add(ClassInfo.create(name))
+              ClassInfo.create(name)?.also {
+                builder.add(it)
+              }
 
               return super.visitFile(file, attrs)
             }

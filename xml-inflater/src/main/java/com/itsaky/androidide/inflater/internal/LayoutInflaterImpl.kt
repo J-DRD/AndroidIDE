@@ -65,6 +65,7 @@ open class LayoutInflaterImpl : ILayoutInflater {
 
   override var inflationEventListener: IInflateEventsListener? = null
   override var module: AndroidModule? = null
+  private var manuallyStartedParse = false
   private var _primaryInflatingFile: File? = null
   private var _currentLayoutFile: LayoutFile? = null
 
@@ -95,7 +96,11 @@ open class LayoutInflaterImpl : ILayoutInflater {
     this.inflationEventListener = null
     this._primaryInflatingFile = null
     this._currentLayoutFile = null
-    endParse()
+
+    if (manuallyStartedParse) {
+      // end the pare only if we called startParse()
+      endParse()
+    }
   }
 
   protected open fun doInflate(file: File, parent: ViewGroup): List<IView> {
@@ -187,7 +192,7 @@ open class LayoutInflaterImpl : ILayoutInflater {
       } else {
         onCreatePlatformView(widget, parentView, module, widgets)
       })
-        as ViewImpl
+          as ViewImpl
 
     addNamespaceDecls(element, view)
     applyAttributes(element, view, parent)
@@ -212,7 +217,7 @@ open class LayoutInflaterImpl : ILayoutInflater {
     view: ViewImpl,
     parent: IViewGroup,
     attachToParent: Boolean = true,
-    checkAttr: (XmlAttribute) -> Boolean = { true }
+    shouldApplyAttr: (XmlAttribute) -> Boolean = { true }
   ) {
     val parentView = parent.view as ViewGroup
     val adapter =
@@ -228,16 +233,13 @@ open class LayoutInflaterImpl : ILayoutInflater {
 
     if (element.attributeCount > 0) {
       for (xmlAttribute in element.attributeList) {
-        if (!checkAttr(xmlAttribute)) {
-          continue
-        }
 
         val namespace =
           if (xmlAttribute.namespaceUri.isNullOrBlank()) null
           else view.findNamespaceByUri(xmlAttribute.namespaceUri)
 
         val attr = onCreateAttribute(view, namespace, xmlAttribute.name, xmlAttribute.value)
-        view.addAttribute(attribute = attr, update = true)
+        view.addAttribute(attribute = attr, apply = shouldApplyAttr(xmlAttribute), update = true)
         inflationEventListener?.onEvent(OnApplyAttributeEvent(view, attr))
       }
     }
@@ -271,13 +273,13 @@ open class LayoutInflaterImpl : ILayoutInflater {
     }
 
     val (processor, module) = processXmlFile(file)
-    
+
     // we need to restore the layout file instance as well
     val inflated =
       currentLayoutFile.let { layoutFile ->
         doInflate(processor, module) { parent }.also { _currentLayoutFile = layoutFile }
       }
-    
+
     if (inflated.isEmpty() || inflated.size > 1) {
       // probably a merged view or no views at all
       // no need to apply attributes
@@ -377,13 +379,16 @@ open class LayoutInflaterImpl : ILayoutInflater {
       } else {
         startParse(this.module!!)
       }
+      this.manuallyStartedParse = true
+    } else {
+      manuallyStartedParse = false
     }
     inflationEventListener?.onEvent(InflationStartEvent())
   }
 
   private fun wrap(parent: ViewGroup): IViewGroup {
     return componentFactory.createView(currentLayoutFile, parent.javaClass.name, parent)
-      as IViewGroup
+        as IViewGroup
   }
 
   private fun SourcePosition.lineCol(): String {

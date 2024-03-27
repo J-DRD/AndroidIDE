@@ -17,11 +17,13 @@
 
 package com.itsaky.androidide.services.log
 
+import android.util.Log
 import com.itsaky.androidide.logsender.ILogReceiver
 import com.itsaky.androidide.logsender.ILogSender
 import com.itsaky.androidide.models.LogLine
-import com.itsaky.androidide.utils.ILogger
-import java.util.concurrent.ConcurrentHashMap
+import com.itsaky.androidide.tasks.executeAsyncProvideError
+import org.slf4j.LoggerFactory
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -32,10 +34,12 @@ import kotlin.concurrent.withLock
  */
 class LogReceiverImpl(consumer: ((LogLine) -> Unit)? = null) : ILogReceiver.Stub(), AutoCloseable {
 
-  private val log = ILogger.newInstance("LogReceiverImpl")
   private val senderHandler = MultiLogSenderHandler()
-  private val senders = ConcurrentHashMap<Int, ILogSender>()
+  private val senders = LogSendersRegistry()
   private val consumerLock = ReentrantLock(true)
+  private val shouldStartReaders = AtomicBoolean(false)
+
+  internal var connectionObserver: ((ConnectionObserverParams) -> Unit)? = null
 
   internal var consumer: ((LogLine) -> Unit)? = consumer
     set(value) {
@@ -43,12 +47,17 @@ class LogReceiverImpl(consumer: ((LogLine) -> Unit)? = null) : ILogReceiver.Stub
       senderHandler.consumer = value?.let { synchronizeConsumer(value) }
     }
 
+  companion object {
+
+    private val log = LoggerFactory.getLogger(LogReceiverImpl::class.java)
+  }
+
   private fun synchronizeConsumer(consumer: (LogLine) -> Unit): (LogLine) -> Unit {
     return { line -> consumerLock.withLock { consumer(line) } }
   }
 
   fun acceptSenders() {
-    if (senderHandler.isAlive) {
+    if (senderHandler.isAlive()) {
       return
     }
 
@@ -56,33 +65,127 @@ class LogReceiverImpl(consumer: ((LogLine) -> Unit)? = null) : ILogReceiver.Stub
     senderHandler.start()
   }
 
-  override fun connect(sender: ILogSender?) {
-    val port = senderHandler.getPort()
-    if (port == -1) {
-      log.error("A log sender is trying to connect, but log receiver is not started")
-      return
+  override fun ping() {
+    doAsync("ping") {
+      Log.d("LogRecevier", "ping: Received a ping request")
     }
+  }
 
-    sender?.let {
-      if (senders.containsKey(it.pid)) {
-        log.warn("Rejecting duplicate connection request from client '${it.pid}'")
-        return
+  override fun connect(sender: ILogSender?) {
+    doAsync("connect") {
+      val port = senderHandler.getPort()
+      if (port == -1) {
+        log.error("A log sender is trying to connect, but log receiver is not started")
+        return@doAsync
       }
 
-      log.info("Connecting to client ${it.pid}")
+      val caching = sender?.let { CachingLogSender(it, port, false) } ?: return@doAsync
 
-      this.senders[it.pid] = it
+      val existingSender = senders.getByPackage(caching.packageName)
 
-      it.startReader(port)
+      if (existingSender != null) {
+        senderHandler.removeClient(existingSender.id)
+      }
 
-      log.info("Total clients connected: ${senders.size}")
+      if (existingSender?.isAlive() == true) {
+        log.warn(
+          "Client '${existingSender.packageName}' has been restarted with process ID '${caching.pid}'" +
+              " Previous connection with process ID '${existingSender.pid}' will be closed...")
+        existingSender.onDisconnect()
+      }
+
+      connectSender(caching, port)
     }
+  }
+
+  private fun connectSender(caching: CachingLogSender, port: Int) {
+    // logging this also makes sure that the package name, pid and sender ID are
+    // cached when the sender binds to the service
+    // these fields are then used on disconnectAll()
+    log.info("Connecting to client {}:{}:{}", caching.packageName, caching.pid, caching.id)
+
+    this.senders.put(caching)
+
+    if (shouldStartReaders.get()) {
+      caching.startReader(port)
+      caching.isStarted = true
+    }
+
+    logTotalConnected()
+
+    notifyConnectionObserver(caching.id)
+  }
+
+  internal fun startReaders() {
+    this.shouldStartReaders.set(true)
+
+    doAsync("startReaders") {
+      senders.getPendingSenders().forEach { sender ->
+        log.info("Notifying sender '{}' to start reading logs...", sender.packageName)
+        sender.startReader(sender.port)
+      }
+    }
+  }
+
+  override fun disconnect(packageName: String, senderId: String) {
+    doAsync("disconnect") {
+      val port = senderHandler.getPort()
+      if (port == -1) {
+        return@doAsync
+      }
+
+      if (!senders.containsKey(packageName)) {
+        log.warn(
+          "Received disconnect request from a log sender which is not connected: '${packageName}'")
+        return@doAsync
+      }
+
+      disconnectSender(packageName, senderId)
+    }
+  }
+
+  internal fun disconnectAll() {
+    log.debug("Disconnecting from all senders...")
+    this.senders.forEach { sender ->
+      try {
+        sender.onDisconnect()
+        disconnectSender(sender.packageName, sender.id)
+      } catch (e: Exception) {
+        log.error("Failed to disconnect from sender", e)
+      }
+    }
+  }
+
+  private fun disconnectSender(packageName: String, senderId: String) {
+    log.info("Disconnecting from client: '{}'", packageName)
+    this.senderHandler.removeClient(senderId)
+    this.senders.remove(packageName)
+    logTotalConnected()
+
+    notifyConnectionObserver(senderId)
   }
 
   override fun close() {
     // TODO : Send close request to clients
     senderHandler.close()
     consumer = null
+    connectionObserver = null
     senders.clear()
+  }
+
+  private fun doAsync(actionName: String, action: () -> Unit) {
+    executeAsyncProvideError(action::invoke) { _, error ->
+      if (error != null) {
+        log.error("Failed to perform action '{}'", actionName, error)
+      }
+    }
+  }
+
+  private fun notifyConnectionObserver(senderId: String) {
+    connectionObserver?.invoke(ConnectionObserverParams(senderId, this.senders.size))
+  }
+
+  private fun logTotalConnected() {
+    log.info("Total clients connected: {}", senders.size)
   }
 }

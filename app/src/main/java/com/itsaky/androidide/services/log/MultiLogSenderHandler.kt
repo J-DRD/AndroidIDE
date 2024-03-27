@@ -17,9 +17,20 @@
 
 package com.itsaky.androidide.services.log
 
+import com.itsaky.androidide.logsender.socket.SenderInfoCommand
+import com.itsaky.androidide.logsender.socket.SocketCommandParser
 import com.itsaky.androidide.models.LogLine
-import com.itsaky.androidide.utils.ILogger
+import com.itsaky.androidide.tasks.cancelIfActive
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
+import java.lang.Thread.currentThread
 import java.net.ServerSocket
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -28,56 +39,106 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * @author Akash Yadav
  */
-class MultiLogSenderHandler(consumer: ((LogLine) -> Unit)? = null) : Thread("MultiLogSenderHandler"), AutoCloseable {
+class MultiLogSenderHandler(consumer: ((LogLine) -> Unit)? = null) : AutoCloseable {
 
-  private val log = ILogger.newInstance("MultiLogSenderHandler")
-  private val clients = mutableListOf<LogSenderHandler>()
+  private val clients = ConcurrentHashMap<String, LogSenderHandler>()
   private val port = AtomicInteger(-1)
-  private var keepAlive = AtomicBoolean(false)
+  private var isAlive = AtomicBoolean(false)
+
+  private var logHandlerScope = CoroutineScope(
+    Dispatchers.IO + CoroutineName("MultiLogSenderHandler"))
 
   internal var consumer: ((LogLine) -> Unit)? = consumer
     set(value) {
       field = value
-      clients.forEach { it.consumer = value }
+      clients.forEach { (_, client) -> client.consumer = value }
     }
 
-  fun getPort() : Int {
+  companion object {
+    private val log = LoggerFactory.getLogger(MultiLogSenderHandler::class.java)
+  }
+
+  fun getPort(): Int {
     return port.get()
   }
 
-  override fun run() {
+  private suspend fun startAsync() = withContext(Dispatchers.IO) {
+    val job = coroutineContext[Job]
+    val server = try {
+      ServerSocket(0)
+    } catch (err: Exception) {
+      log.error("Failed to start log receiver socket", err)
+      return@withContext
+    }
+
     try {
-      ServerSocket(0).use {
-        port.set(it.localPort)
-        log.info("Starting log receiver server socket at port ${getPort()}")
+      port.set(server.localPort)
+      log.info("Starting log receiver server socket at port {}", getPort())
 
-        while(keepAlive.get()) {
-          val handler = LogSenderHandler(it.accept(), consumer) { handler ->
-            clients.remove(handler)
-          }
+      while (job?.isCancelled != true && isAlive.get()) {
+        val clientSocket = server.accept()
 
-          log.info("A log sender has been connected")
-
-          clients.add(handler)
-          handler.start()
+        val senderInfoLine = clientSocket.getInputStream().bufferedReader().readLine()
+        val command = SocketCommandParser.parse(senderInfoLine)
+        if (command == null || command !is SenderInfoCommand) {
+          log.error(
+            "Cannot accept log sender client. A sender must send the /sender command first.")
+          clientSocket.use {}
+          continue
         }
+
+        val handler = LogSenderHandler(command, clientSocket, consumer, ::removeClient)
+
+        log.info("A log sender has been connected")
+
+        clients[command.senderId] = handler
+
+        handler.startAsync()
       }
+    } catch (interrupt: InterruptedException) {
+      log.warn("MultiLogSenderHandler thread has been interrupted")
+      currentThread().interrupt()
     } catch (err: Throwable) {
-      if (err !is InterruptedException) {
-        log.error("Failed to start log receiver socket", err)
-      }
+      log.error("An error occurred while accept log client connections", err)
     } finally {
-      this.close()
+      this@MultiLogSenderHandler.close()
+      server.close()
     }
   }
 
-  override fun start() {
-    keepAlive.set(true)
-    super.start()
+  internal fun removeClient(senderId: String) {
+    clients.remove(senderId)?.closeAndLogError()
   }
 
+  private fun removeAllClients() {
+    this.clients.forEach { (_, handler) ->
+      handler.closeAndLogError()
+    }
+
+    this.clients.clear()
+  }
+
+  fun start() {
+    isAlive.set(true)
+    logHandlerScope.launch {
+      startAsync()
+    }
+  }
+
+  fun isAlive() = isAlive.get()
+
   override fun close() {
-    this.keepAlive.set(false)
-    clients.forEach(LogSenderHandler::close)
+    this.isAlive.set(false)
+    this.removeAllClients()
+    this.consumer = null
+    this.logHandlerScope.cancelIfActive()
+  }
+
+  private fun LogSenderHandler.closeAndLogError() {
+    try {
+      close()
+    } catch (e: Exception) {
+      log.warn("Failed to close", e)
+    }
   }
 }

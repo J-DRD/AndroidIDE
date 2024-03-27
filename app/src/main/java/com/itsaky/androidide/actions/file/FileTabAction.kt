@@ -17,12 +17,12 @@
 
 package com.itsaky.androidide.actions.file
 
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem.Location
 import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_FILE_TABS
 import com.itsaky.androidide.actions.EditorActivityAction
 import com.itsaky.androidide.actions.markInvisible
+import com.itsaky.androidide.activities.editor.EditorHandlerActivity
 
 /**
  * Action related to file tabs. Shown only when there is at least one file opened.
@@ -48,11 +48,11 @@ abstract class FileTabAction : EditorActivityAction() {
           return
         }
 
-    visible = activity.viewModel.getOpenedFiles().isNotEmpty()
+    visible = activity.editorViewModel.getOpenedFiles().isNotEmpty()
     enabled = visible
   }
 
-  override fun execAction(data: ActionData): Any {
+  override suspend fun execAction(data: ActionData): Any {
     val activity = data.getActivity() ?: return false
     return activity.doAction(data)
   }

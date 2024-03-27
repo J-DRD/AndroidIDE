@@ -28,6 +28,8 @@ import com.blankj.utilcode.util.SizeUtils
 import com.itsaky.androidide.fragments.BaseFragment
 import com.itsaky.androidide.inflater.IView
 import com.itsaky.androidide.inflater.internal.LayoutFile
+import com.itsaky.androidide.inflater.utils.endParse
+import com.itsaky.androidide.inflater.utils.startParse
 import com.itsaky.androidide.uidesigner.R
 import com.itsaky.androidide.uidesigner.UIDesignerActivity
 import com.itsaky.androidide.uidesigner.databinding.FragmentDesignerWorkspaceBinding
@@ -36,13 +38,14 @@ import com.itsaky.androidide.uidesigner.drag.WidgetTouchListener
 import com.itsaky.androidide.uidesigner.drawable.UiViewLayeredForeground
 import com.itsaky.androidide.uidesigner.models.CommonUiView
 import com.itsaky.androidide.uidesigner.models.PlaceholderView
+import com.itsaky.androidide.uidesigner.models.RootWorkspaceView
 import com.itsaky.androidide.uidesigner.models.UiViewGroup
 import com.itsaky.androidide.uidesigner.undo.UndoManager
 import com.itsaky.androidide.uidesigner.utils.UiLayoutInflater
 import com.itsaky.androidide.uidesigner.utils.bgDesignerView
 import com.itsaky.androidide.uidesigner.utils.layeredForeground
 import com.itsaky.androidide.uidesigner.viewmodel.WorkspaceViewModel
-import com.itsaky.androidide.utils.ILogger
+import org.slf4j.LoggerFactory
 import java.io.File
 
 /**
@@ -52,20 +55,21 @@ import java.io.File
  */
 class DesignerWorkspaceFragment : BaseFragment() {
 
-  private val log = ILogger.newInstance("DesignerWorkspaceFragment")
   private var binding: FragmentDesignerWorkspaceBinding? = null
   internal val viewModel by viewModels<WorkspaceViewModel>(ownerProducer = { requireActivity() })
 
-  private var _viewInfo: ViewInfoSheet? = null
   private val touchSlop by lazy { get(requireContext()).scaledTouchSlop }
-  private val inflater by lazy { UiLayoutInflater() }
-
-  private val viewInfo: ViewInfoSheet
-    get() = this._viewInfo ?: ViewInfoSheet().also { _viewInfo = it }
 
   internal var isInflating = false
   internal val workspaceView by lazy {
-    UiViewGroup(LayoutFile(File(""), ""), LinearLayout::class.qualifiedName!!, binding!!.workspace)
+    RootWorkspaceView(
+      LayoutFile(
+        File("")
+        , ""
+      ),
+      LinearLayout::class.qualifiedName!!,
+      binding!!.workspace
+    )
   }
 
   val undoManager: UndoManager
@@ -86,9 +90,11 @@ class DesignerWorkspaceFragment : BaseFragment() {
 
   private val hierarchyHandler by lazy { WorkspaceViewHierarchyHandler() }
   private val attrHandler by lazy { WorkspaceViewAttrHandler() }
-  private val inflationHandler by lazy { WorkspaceLayoutInflationHandler() }
 
   companion object {
+
+    private val log = LoggerFactory.getLogger(DesignerWorkspaceFragment::class.java)
+
     const val DRAGGING_WIDGET = "DRAGGING_WIDGET"
     const val DRAGGING_WIDGET_MIME = "androidide/uidesigner_widget"
     const val HIERARCHY_CHANGE_TRANSITION_DURATION = 100L
@@ -105,7 +111,6 @@ class DesignerWorkspaceFragment : BaseFragment() {
     this.binding = FragmentDesignerWorkspaceBinding.inflate(inflater, container, false)
     hierarchyHandler.init(this)
     attrHandler.init(this)
-    inflationHandler.init(this)
     return this.binding!!.root
   }
 
@@ -115,19 +120,29 @@ class DesignerWorkspaceFragment : BaseFragment() {
     viewModel._workspaceScreen.observe(viewLifecycleOwner) { binding?.flipper?.displayedChild = it }
     viewModel._errText.observe(viewLifecycleOwner) { binding?.errText?.text = it }
 
-    inflater.inflationEventListener = this.inflationHandler
-    var hasError = false
+    val inflationHandler = WorkspaceLayoutInflationHandler()
+    inflationHandler.init(this)
+
+    val inflater = UiLayoutInflater()
+    inflater.inflationEventListener = inflationHandler
+
     val inflated =
       try {
-        inflater.inflate(viewModel.file, workspaceView)
+        startParse(viewModel.file)
+        inflater.inflate(viewModel.file, workspaceView).also {
+          viewModel.layoutHasError = false
+        }
       } catch (e: Throwable) {
-        log.error(e)
+        log.error("Failed to inflate layout", e)
         viewModel.errText = "${e.message}${e.cause?.message?.let { "\n$it" } ?: ""}"
-        hasError = true
+        viewModel.layoutHasError = true
         emptyList()
+      } finally {
+        inflationHandler.release()
+        inflater.close()
       }
 
-    if (inflated.isEmpty() && !hasError) {
+    if (inflated.isEmpty() && !viewModel.layoutHasError) {
       viewModel.errText = getString(R.string.msg_empty_ui_layout)
     }
 
@@ -139,11 +154,10 @@ class DesignerWorkspaceFragment : BaseFragment() {
   override fun onDestroyView() {
     super.onDestroyView()
     this.binding = null
-    this._viewInfo = null
     this.hierarchyHandler.release()
     this.attrHandler.release()
-    this.inflationHandler.release()
-    this.inflater.close()
+
+    endParse()
   }
 
   internal fun setupView(view: IView) {
@@ -162,7 +176,8 @@ class DesignerWorkspaceFragment : BaseFragment() {
     when (val fg = view.view.foreground) {
       null -> view.view.foreground = bgDesignerView(requireContext())
       is UiViewLayeredForeground ->
-        log.warn("Attempt to reset UiViewLayeredForeground on view", view.name, fg::class.java)
+        log.warn("Attempt to reset UiViewLayeredForeground on view {} with foreground drawable type {}", view.name, fg::class.java)
+
       else -> view.view.foreground = layeredForeground(requireContext(), fg)
     }
 
@@ -177,7 +192,12 @@ class DesignerWorkspaceFragment : BaseFragment() {
 
   internal fun showViewInfo(view: IView) {
     viewModel.view = view
-    viewInfo.show(childFragmentManager, ViewInfoSheet.TAG)
+
+    val existing = childFragmentManager.findFragmentByTag(ViewInfoSheet.TAG)
+    if (existing == null) {
+      val viewInfo = ViewInfoSheet()
+      viewInfo.show(childFragmentManager, ViewInfoSheet.TAG)
+    }
   }
 
   private fun setupViewGroup(viewGroup: UiViewGroup) {

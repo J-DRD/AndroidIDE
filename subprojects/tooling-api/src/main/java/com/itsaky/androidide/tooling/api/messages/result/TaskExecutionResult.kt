@@ -26,8 +26,21 @@ package com.itsaky.androidide.tooling.api.messages.result
  * @author Akash Yadav
  */
 data class TaskExecutionResult(val isSuccessful: Boolean, val failure: Failure?) {
+
+  companion object {
+
+    /**
+     * Result for a successful build.
+     */
+    @JvmStatic
+    val SUCCESS = TaskExecutionResult(true, null)
+  }
+
   enum class Failure {
     PROJECT_NOT_FOUND,
+    PROJECT_NOT_INITIALIZED,
+    PROJECT_NOT_DIRECTORY,
+    PROJECT_DIRECTORY_INACCESSIBLE,
     UNKNOWN,
     UNSUPPORTED_GRADLE_VERSION,
     UNSUPPORTED_CONFIGURATION,

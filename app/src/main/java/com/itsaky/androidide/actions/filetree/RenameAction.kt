@@ -27,19 +27,22 @@ import com.itsaky.androidide.adapters.viewholders.FileTreeViewHolder
 import com.itsaky.androidide.eventbus.events.file.FileRenameEvent
 import com.itsaky.androidide.preferences.databinding.LayoutDialogTextInputBinding
 import com.itsaky.androidide.projects.FileManager
+import com.itsaky.androidide.tasks.launchAsyncWithProgress
 import com.itsaky.androidide.utils.DialogUtils
 import com.itsaky.androidide.utils.FlashType
 import com.itsaky.androidide.utils.flashMessage
 import com.unnamed.b.atv.model.TreeNode
-import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.greenrobot.eventbus.EventBus
+import java.io.File
 
 /**
  * Action to rename the selected file.
  *
  * @author Akash Yadav
  */
-class RenameAction(context: Context) :
+class RenameAction(context: Context, override val order: Int) :
   BaseFileTreeAction(
     context,
     labelRes = R.string.rename_file,
@@ -48,7 +51,7 @@ class RenameAction(context: Context) :
 
   override val id: String = "ide.editor.fileTree.rename"
 
-  override fun execAction(data: ActionData) {
+  override suspend fun execAction(data: ActionData) {
     val context = data.requireActivity()
     val file = data.requireFile()
     val lastHeld = data.getTreeNode()
@@ -65,29 +68,39 @@ class RenameAction(context: Context) :
       dialogInterface,
       _ ->
       dialogInterface.dismiss()
-      val name: String = binding.name.editText!!.text.toString().trim()
-      val renamed = name.length in 1..40 && FileUtils.rename(file, name)
-      flashMessage(
-        if (renamed) com.itsaky.androidide.resources.R.string.renamed
-        else com.itsaky.androidide.resources.R.string.rename_failed,
-        if (renamed) FlashType.SUCCESS else FlashType.ERROR
-      )
-      if (!renamed) {
-        return@setPositiveButton
-      }
+      actionScope.launchAsyncWithProgress(
+          configureFlashbar = { builder, cancelChecker ->
+            builder.message(com.itsaky.androidide.resources.R.string.please_wait)
+          },
+          action = { _, _ ->
+            val name: String = binding.name.editText!!.text.toString().trim()
+            val renamed = name.length in 1..40 && FileUtils.rename(file, name)
 
-      notifyFileRenamed(file, name, context)
+            if (renamed) {
+              notifyFileRenamed(file, name, context)
+            }
 
-      if (lastHeld != null) {
-        val parent = lastHeld.parent
-        parent.deleteChild(lastHeld)
-        val node = TreeNode(File(file.parentFile, name))
-        node.viewHolder = FileTreeViewHolder(context)
-        parent.addChild(node)
-        requestExpandNode(parent)
-      } else {
-        requestFileListing()
-      }
+            withContext(Dispatchers.Main) {
+              flashMessage(
+                  if (renamed) com.itsaky.androidide.resources.R.string.renamed
+                  else com.itsaky.androidide.resources.R.string.rename_failed,
+                  if (renamed) FlashType.SUCCESS else FlashType.ERROR)
+              if (!renamed) {
+                return@withContext
+              }
+
+              if (lastHeld != null) {
+                val parent = lastHeld.parent
+                parent.deleteChild(lastHeld)
+                val node = TreeNode(File(file.parentFile, name))
+                node.viewHolder = FileTreeViewHolder(context)
+                parent.addChild(node)
+                requestExpandNode(parent)
+              } else {
+                requestFileListing()
+              }
+            }
+          })
     }
     builder.create().show()
   }

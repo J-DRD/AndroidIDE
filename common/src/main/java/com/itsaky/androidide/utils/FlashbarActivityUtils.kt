@@ -44,6 +44,7 @@ val COLOR_SUCCESS = Color.parseColor("#4CAF50")
 val COLOR_ERROR = Color.parseColor("#f44336")
 const val COLOR_INFO = Color.DKGRAY
 
+@JvmOverloads
 fun Activity.flashbarBuilder(
   gravity: Flashbar.Gravity = TOP,
   duration: Long = DURATION_SHORT,
@@ -99,6 +100,22 @@ fun Activity.flashError(@StringRes msg: Int) {
 
 fun Activity.flashInfo(@StringRes msg: Int) {
   flashbarBuilder().infoIcon().message(msg).showOnUiThread()
+}
+
+@JvmOverloads
+fun <R : Any?> Activity.flashProgress(
+  configure: (Flashbar.Builder.() -> Unit)? = null,
+  action: (Flashbar) -> R
+) : R {
+  val builder = flashbarBuilder(gravity = TOP, duration = DURATION_INDEFINITE)
+    .showProgress(Flashbar.ProgressPosition.LEFT)
+
+  configure?.invoke(builder)
+
+  val flashbar = builder.build()
+  flashbar.show()
+
+  return action(flashbar)
 }
 
 fun Flashbar.Builder.showOnUiThread() {

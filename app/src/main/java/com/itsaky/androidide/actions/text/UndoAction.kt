@@ -19,14 +19,14 @@ package com.itsaky.androidide.actions.text
 
 import android.content.Context
 import androidx.core.content.ContextCompat
-import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorRelatedAction
+import com.itsaky.androidide.resources.R
 
 /** @author Akash Yadav */
-class UndoAction(context: Context) : EditorRelatedAction() {
+class UndoAction(context: Context, override val order: Int) : EditorRelatedAction() {
 
-  override val id: String = "editor_undo"
+  override val id: String = "ide.editor.code.text.undo"
 
   init {
     label = context.getString(R.string.undo)
@@ -40,12 +40,12 @@ class UndoAction(context: Context) : EditorRelatedAction() {
       return
     }
 
-    val editor = getEditor(data)!!
+    val editor = data.getEditor()!!
     enabled = editor.canUndo()
   }
 
-  override fun execAction(data: ActionData): Any {
-    val editor = getEditor(data)
+  override suspend fun execAction(data: ActionData): Any {
+    val editor = data.getEditor()
     return if (editor != null) {
       editor.undo()
       data.getActivity()?.invalidateOptionsMenu()

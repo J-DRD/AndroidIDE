@@ -15,9 +15,12 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import com.itsaky.androidide.build.config.BuildConfig
+
 plugins {
     id("com.android.library")
     id("kotlin-android")
+    id("kotlin-kapt")
 }
 
 android {
@@ -25,9 +28,13 @@ android {
 }
 
 dependencies {
+    kapt(libs.google.auto.service)
+
     implementation(libs.common.kotlin)
+    implementation(libs.google.auto.service.annotations)
+    implementation(projects.common)
     implementation(projects.logger)
-    implementation(projects.subprojects.jdt)
+    implementation(libs.composite.jdt)
     
     api(projects.lookup)
     api(projects.subprojects.aaptcompiler)

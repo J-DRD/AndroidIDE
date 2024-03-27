@@ -19,33 +19,36 @@ package com.itsaky.androidide.actions.etc
 
 import android.content.Context
 import androidx.core.content.ContextCompat
-import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorActivityAction
 import com.itsaky.androidide.actions.markInvisible
-import com.itsaky.androidide.projects.ProjectManager
+import com.itsaky.androidide.projects.IProjectManager
+import com.itsaky.androidide.resources.R
 
 /** @author Akash Yadav */
 class FindInProjectAction() : EditorActivityAction() {
 
   override var requiresUIThread: Boolean = true
+  override var order: Int = 0
 
-  constructor(context: Context) : this() {
-    label = context.getString(R.string.menu_find_project)
-    icon = ContextCompat.getDrawable(context, R.drawable.ic_search_project)
+  constructor(context: Context, order: Int) : this() {
+    this.label = context.getString(R.string.menu_find_project)
+    this.icon = ContextCompat.getDrawable(context, R.drawable.ic_search_project)
+    this.order = order
   }
 
-  override val id: String = "editor_findInProject"
+  override val id: String = "ide.editor.find.inProject"
 
   override fun prepare(data: ActionData) {
+    super.prepare(data)
     data.getActivity()
       ?: run {
         markInvisible()
         return
       }
 
-    val root = ProjectManager.rootProject
-    if (root == null || root.subModules.isEmpty()) {
+    val project = IProjectManager.getInstance().rootProject
+    if (project == null || project.subProjects.isEmpty()) {
       markInvisible()
       return
     }
@@ -54,7 +57,7 @@ class FindInProjectAction() : EditorActivityAction() {
     enabled = true
   }
 
-  override fun execAction(data: ActionData): Boolean {
+  override suspend fun execAction(data: ActionData): Boolean {
     val context = data.getActivity() ?: return false
     val dialog = context.findInProjectDialog
 

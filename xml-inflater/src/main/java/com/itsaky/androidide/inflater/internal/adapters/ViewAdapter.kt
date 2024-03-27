@@ -26,7 +26,28 @@ import android.view.ViewGroup.MarginLayoutParams
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
-import android.widget.RelativeLayout.*
+import android.widget.RelativeLayout.ABOVE
+import android.widget.RelativeLayout.ALIGN_BASELINE
+import android.widget.RelativeLayout.ALIGN_BOTTOM
+import android.widget.RelativeLayout.ALIGN_END
+import android.widget.RelativeLayout.ALIGN_LEFT
+import android.widget.RelativeLayout.ALIGN_PARENT_BOTTOM
+import android.widget.RelativeLayout.ALIGN_PARENT_END
+import android.widget.RelativeLayout.ALIGN_PARENT_LEFT
+import android.widget.RelativeLayout.ALIGN_PARENT_RIGHT
+import android.widget.RelativeLayout.ALIGN_PARENT_START
+import android.widget.RelativeLayout.ALIGN_PARENT_TOP
+import android.widget.RelativeLayout.ALIGN_RIGHT
+import android.widget.RelativeLayout.ALIGN_START
+import android.widget.RelativeLayout.ALIGN_TOP
+import android.widget.RelativeLayout.BELOW
+import android.widget.RelativeLayout.CENTER_HORIZONTAL
+import android.widget.RelativeLayout.CENTER_IN_PARENT
+import android.widget.RelativeLayout.CENTER_VERTICAL
+import android.widget.RelativeLayout.END_OF
+import android.widget.RelativeLayout.LEFT_OF
+import android.widget.RelativeLayout.RIGHT_OF
+import android.widget.RelativeLayout.START_OF
 import androidx.annotation.ChecksSdkIntAtLeast
 import androidx.core.view.updatePadding
 import androidx.core.view.updatePaddingRelative
@@ -38,9 +59,10 @@ import com.itsaky.androidide.inflater.IAttribute
 import com.itsaky.androidide.inflater.INamespace
 import com.itsaky.androidide.inflater.IView
 import com.itsaky.androidide.inflater.IViewAdapter
-import com.itsaky.androidide.resources.R
+import com.itsaky.androidide.inflater.internal.IncludeView
 import com.itsaky.androidide.inflater.models.UiWidget
 import com.itsaky.androidide.inflater.utils.newAttribute
+import com.itsaky.androidide.resources.R
 
 /**
  * Attribute adapter for [View].
@@ -143,6 +165,10 @@ open class ViewAdapter<T : View> : IViewAdapter<T>() {
   }
 
   override fun applyBasic(view: IView) {
+    if (view is IncludeView) {
+      return
+    }
+
     view.addAttribute(newAttribute(view = view, name = "layout_height", value = "wrap_content"))
     view.addAttribute(newAttribute(view = view, name = "layout_width", value = "wrap_content"))
   }

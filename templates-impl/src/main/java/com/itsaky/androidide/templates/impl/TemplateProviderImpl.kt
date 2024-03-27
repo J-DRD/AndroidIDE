@@ -27,6 +27,7 @@ import com.itsaky.androidide.templates.impl.composeActivity.composeActivityProje
 import com.itsaky.androidide.templates.impl.emptyActivity.emptyActivityProject
 import com.itsaky.androidide.templates.impl.navDrawerActivity.navDrawerActivityProject
 import com.itsaky.androidide.templates.impl.noActivity.noActivityProjectTemplate
+import com.itsaky.androidide.templates.impl.noAndroidXActivity.noAndroidXActivityProject
 import com.itsaky.androidide.templates.impl.tabbedActivity.tabbedActivityProject
 
 /**
@@ -35,13 +36,13 @@ import com.itsaky.androidide.templates.impl.tabbedActivity.tabbedActivityProject
  * @author Akash Yadav
  */
 @Suppress("unused")
-@AutoService(ITemplateProvider::class) //
+@AutoService(ITemplateProvider::class)
 class TemplateProviderImpl : ITemplateProvider {
 
-  private val templates = mutableMapOf<String, Template<*>>().apply {
-    templates().forEach { template ->
-      this[template.templateId] = template
-    }
+  private val templates = mutableMapOf<String, Template<*>>()
+
+  init {
+    initializeTemplates()
   }
 
   private fun templates() =
@@ -53,8 +54,15 @@ class TemplateProviderImpl : ITemplateProvider {
       navDrawerActivityProject(),
       bottomNavActivityProject(),
       tabbedActivityProject(),
+      noAndroidXActivityProject(),
       composeActivityProject()
     )
+
+  private fun initializeTemplates() {
+    templates().forEach { template ->
+      templates[template.templateId] = template
+    }
+  }
   //@formatter:on
 
   override fun getTemplates(): List<Template<*>> {
@@ -65,7 +73,13 @@ class TemplateProviderImpl : ITemplateProvider {
     return templates[templateId]
   }
 
-  override fun clear() {
+  override fun reload() {
+    release()
+    initializeTemplates()
+  }
+
+  override fun release() {
+    templates.forEach { it.value.release() }
     templates.clear()
   }
 }

@@ -17,8 +17,9 @@
 
 package com.itsaky.androidide.preferences.internal
 
+import com.itsaky.androidide.utils.Environment
+
 // Defined in PreferenceManager so that it could be accessible from Environment class
-import com.itsaky.androidide.managers.PreferenceManager.KEY_TP_FIX
 
 const val STACKTRACE = "idepref_gradleCmd_stacktrace"
 const val DEBUG = "idepref_gradleCmd_debug"
@@ -31,7 +32,8 @@ const val OFFLINE_MODE = "idepref_gradleCmd_offlineMode"
 const val GRADLE_COMMANDS = "idepref_build_gradleCommands"
 const val GRADLE_CLEAR_CACHE = "idepref_build_gradleClearCache"
 const val CUSTOM_GRADLE_INSTALLATION = "idepref_build_customGradleInstallation"
-const val TP_FIX = KEY_TP_FIX
+const val LAUNCH_APP_AFTER_INSTALL = "ide.build.run.launchAppAfterInstall"
+const val PREF_JAVA_HOME = "ide.build.javaHome"
 
 /** Switch for Gradle `--debug` option. */
 var isDebugEnabled: Boolean
@@ -90,11 +92,19 @@ var gradleInstallationDir: String
   }
 
 /**
- * Whether the tag pointer fix should be enabled or not. The fix is needed only if JDK 11 is being
- * used.
+ * Whether the app should be launched automatically after installation (after build).
  */
-var tpFix: Boolean
-  get() = prefManager.getBoolean(TP_FIX, false)
+var launchAppAfterInstall: Boolean
+  get() = prefManager.getBoolean(LAUNCH_APP_AFTER_INSTALL, false)
   set(value) {
-    prefManager.putBoolean(TP_FIX, value)
+    prefManager.putBoolean(LAUNCH_APP_AFTER_INSTALL, value)
+  }
+
+/**
+ * The selected Java installation.
+ */
+var javaHome : String
+  get() = prefManager.getString(PREF_JAVA_HOME, "")
+  set(value) {
+    prefManager.putString(PREF_JAVA_HOME, value)
   }

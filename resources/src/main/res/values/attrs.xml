@@ -1,4 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?><!--
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
   ~  This file is part of AndroidIDE.
   ~
   ~  AndroidIDE is free software: you can redistribute it and/or modify
@@ -16,8 +18,11 @@
   -->
 
 <resources>
+  <!--  Color used for success drawables-->
+  <attr format="color" name="colorSuccess" />
+
   <declare-styleable name="VectorMasterView">
-    <attr name="vector_src" format="reference" />
-    <attr name="use_legacy_parser" format="boolean" />
+    <attr format="reference" name="vector_src" />
+    <attr format="boolean" name="use_legacy_parser" />
   </declare-styleable>
 </resources>

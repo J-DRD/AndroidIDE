@@ -1,12 +1,30 @@
 @file:Suppress("UnstableApiUsage")
 
+import ch.qos.logback.core.util.EnvUtil
+import com.itsaky.androidide.build.config.BuildConfig
+import com.itsaky.androidide.desugaring.ch.qos.logback.core.util.DesugarEnvUtil
+import com.itsaky.androidide.desugaring.utils.JavaIOReplacements.applyJavaIOReplacements
+import com.itsaky.androidide.plugins.AndroidIDEAssetsPlugin
+import kotlin.reflect.jvm.javaMethod
+
 plugins {
   id("com.android.application")
   id("kotlin-android")
   id("kotlin-kapt")
   id("kotlin-parcelize")
-  id("com.google.android.gms.oss-licenses-plugin")
   id("androidx.navigation.safeargs.kotlin")
+  id("com.itsaky.androidide.desugaring")
+}
+
+apply {
+  plugin(AndroidIDEAssetsPlugin::class.java)
+}
+
+buildscript {
+  dependencies {
+    classpath(libs.logging.logback.core)
+    classpath(libs.composite.desugaringCore)
+  }
 }
 
 android {
@@ -17,52 +35,14 @@ android {
     vectorDrawables.useSupportLibrary = true
   }
 
-  compileOptions { isCoreLibraryDesugaringEnabled = true }
-
-  downloadSigningKey()
-
-  // Keystore credentials
-  val alias = getEnvOrProp(KEY_ALIAS)
-  val storePass = getEnvOrProp(KEY_STORE_PASS)
-  val keyPass = getEnvOrProp(KEY_PASS)
-
-  if (alias != null && storePass != null && keyPass != null && signingKey.exists()) {
-    signingConfigs.create("common") {
-      storeFile = signingKey
-      keyAlias = alias
-      storePassword = storePass
-      keyPassword = keyPass
-    }
-
-    buildTypes {
-      debug { signingConfig = signingConfigs.getByName("common") }
-      release { signingConfig = signingConfigs.getByName("common") }
-    }
-  } else {
-    logger.warn(
-      "Signing info not configured. keystoreFile=$signingKey[exists=${signingKey.exists()}]"
-    )
+  androidResources {
+    generateLocaleConfig = true
   }
 
-  buildTypes { release { isShrinkResources = true } }
-
-  packaging {
-    resources.excludes.addAll(
-      arrayOf(
-        "META-INF/eclipse.inf",
-        "META-INF/CHANGES",
-        "META-INF/README.md",
-        "about_files/LICENSE-2.0.txt",
-        "META-INF/AL2.0",
-        "META-INF/LGPL2.1",
-        "plugin.xml",
-        "plugin.properties",
-        "about.mappings",
-        "about.properties",
-        "about.ini",
-        "modeling32.png"
-      )
-    )
+  buildTypes {
+    release {
+      isShrinkResources = true
+    }
   }
 
   lint {
@@ -72,6 +52,25 @@ android {
 }
 
 kapt { arguments { arg("eventBusIndex", "${BuildConfig.packageName}.events.AppEventsIndex") } }
+
+desugaring {
+  replacements {
+    includePackage(
+      "org.eclipse.jgit",
+      "ch.qos.logback.classic.util",
+    )
+
+    applyJavaIOReplacements()
+
+    // EnvUtil.logbackVersion() uses newer Java APIs like Class.getModule() which is not available
+    // on Android. We replace the method usage with DesugarEnvUtil.logbackVersion() which
+    // always returns null
+    replaceMethod(
+      EnvUtil::logbackVersion.javaMethod!!,
+      DesugarEnvUtil::logbackVersion.javaMethod!!
+    )
+  }
+}
 
 dependencies {
   debugImplementation(libs.common.leakcanary)
@@ -85,6 +84,9 @@ dependencies {
   implementation(libs.common.utilcode)
   implementation(libs.common.glide)
   implementation(libs.common.jsoup)
+  implementation(libs.common.kotlin.coroutines.android)
+  implementation(libs.common.retrofit)
+  implementation(libs.common.retrofit.gson)
 
   implementation(libs.google.auto.service.annotations)
   implementation(libs.google.gson)
@@ -109,26 +111,36 @@ dependencies {
   implementation(libs.androidx.transition)
   implementation(libs.androidx.vectors)
   implementation(libs.androidx.animated.vectors)
+  implementation(libs.androidx.work)
+  implementation(libs.androidx.work.ktx)
   implementation(libs.google.material)
   implementation(libs.google.flexbox)
-  implementation(libs.google.oss.licenses)
 
   // Kotlin
-  implementation(libs.androidx.ktx)
+  implementation(libs.androidx.core.ktx)
   implementation(libs.common.kotlin)
+
+  // Dependencies in composite build
+  implementation(libs.composite.appintro)
+  implementation(libs.composite.desugaringCore)
+  implementation(libs.composite.javapoet)
 
   // Local projects here
   implementation(projects.actions)
   implementation(projects.buildInfo)
   implementation(projects.common)
   implementation(projects.editor)
-  implementation(projects.emulatorview)
+  implementation(projects.termux.termuxApp)
+  implementation(projects.termux.termuxView)
+  implementation(projects.termux.termuxEmulator)
+  implementation(projects.termux.termuxShared)
   implementation(projects.eventbus)
   implementation(projects.eventbusAndroid)
   implementation(projects.eventbusEvents)
+  implementation(projects.gradlePluginConfig)
+  implementation(projects.idestats)
   implementation(projects.subprojects.aaptcompiler)
   implementation(projects.subprojects.javacServices)
-  implementation(projects.subprojects.javapoet)
   implementation(projects.subprojects.xmlUtils)
   implementation(projects.subprojects.projects)
   implementation(projects.subprojects.toolingApi)
@@ -146,119 +158,10 @@ dependencies {
   implementation(projects.uidesigner)
   implementation(projects.xmlInflater)
 
-  coreLibraryDesugaring(libs.androidx.lib.desugaring)
-
   // This is to build the tooling-api-impl project before the app is built
   // So we always copy the latest JAR file to assets
   compileOnly(projects.subprojects.toolingApiImpl)
 
-  testImplementation(libs.common.editor)
-  testImplementation(libs.tests.junit)
-  testImplementation(libs.tests.google.truth)
-  testImplementation(libs.tests.robolectric)
-  androidTestImplementation(libs.tests.androidx.junit)
-  androidTestImplementation(libs.tests.androidx.espresso)
-  androidTestImplementation(libs.tests.google.truth)
-}
-
-fun downloadSigningKey() {
-  if (signingKey.exists()) {
-    logger.info("Skipping download as ${signingKey.name} file already exists.")
-    return
-  }
-
-  // URL to download the signing key
-  val url = getEnvOrProp(KEY_URL) ?: return
-
-  // Username and password required to download the keystore
-  val user = getEnvOrProp(AUTH_USER) ?: return
-  val pass = getEnvOrProp(AUTH_PASS) ?: return
-
-  logger.info("Downloading signing key...")
-  val result = exec {
-    workingDir(rootProject.projectDir)
-    commandLine("bash", "./.tools/download_key.sh", signingKey.absolutePath, url, user, pass)
-  }
-
-  result.assertNormalExitValue()
-}
-
-fun getEnvOrProp(key: String): String? {
-  var value: String? = System.getenv(key)
-  if (value.isNullOrBlank()) {
-    value = project.properties[key] as? String?
-  }
-  if (value.isNullOrBlank()) {
-    logger.warn("$key is not set. Debug key will be used to sign the APK")
-    return null
-  }
-  return value
-}
-
-tasks.create("generateInitScript") {
-  val out = file("src/main/assets/data/common/androidide.init.gradle")
-
-  if (out.exists()) {
-    out.delete()
-  }
-
-  doLast {
-    out.bufferedWriter().use {
-      it.write(
-        """
-      initscript {
-        repositories {
-          maven {
-            mavenCentral()
-            
-            // Add snapshots repository for AndroidIDE CI builds
-            url "https://s01.oss.sonatype.org/content/repositories/snapshots/"
-          }
-        }
-    
-        dependencies {
-          classpath '${BuildConfig.packageName}:gradle-plugin:${publishingVersion}'
-        }
-      }
-      
-      gradle.settingsEvaluated { settings ->
-        settings.dependencyResolutionManagement.repositories {
-          // For release builds
-          mavenCentral()
-          
-          // For AndroidIDE CI builds
-          maven { url "https://s01.oss.sonatype.org/content/repositories/snapshots/" }
-        }
-      }
-      
-      gradle.projectsLoaded {
-        rootProject.subprojects.forEach {sub ->
-          sub.afterEvaluate {
-            sub.apply plugin: com.itsaky.androidide.gradle.AndroidIDEGradlePlugin
-          }
-        }
-      }
-      
-    """
-          .trimIndent()
-      )
-    }
-  }
-}
-
-afterEvaluate {
-  val dependents =
-    listOf(
-      "mergeDebugAssets",
-      "mergeReleaseAssets",
-      "lintAnalyzeDebug",
-      "lintAnalyzeRelease",
-      "lintVitalAnalyzeRelease"
-    )
-  for (dependent in dependents) {
-    tasks.getByName(dependent).apply {
-      dependsOn(":subprojects:tooling-api-impl:copyJarToAssets")
-      dependsOn("generateInitScript")
-    }
-  }
+  testImplementation(projects.testing.unit)
+  androidTestImplementation(projects.testing.android)
 }

@@ -14,6 +14,9 @@
  *  You should have received a copy of the GNU General Public License
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import com.itsaky.androidide.build.config.BuildConfig
+
 plugins {
     id("com.android.library")
     id("kotlin-android")
@@ -40,7 +43,7 @@ dependencies {
     implementation(libs.common.javaparser)
     implementation(libs.common.utilcode)
     implementation(libs.androidx.annotation)
-    implementation(libs.google.guava.jre)
+    implementation(libs.google.guava)
     implementation(libs.google.gson)
     
     compileOnly(libs.androidx.appcompat)
@@ -51,22 +54,14 @@ dependencies {
     implementation(projects.editorApi)
     implementation(projects.resources)
     implementation(projects.lsp.api)
-    implementation(projects.subprojects.javac)
     implementation(projects.subprojects.javacServices)
-    implementation(projects.subprojects.javapoet)
-    implementation(projects.subprojects.googleJavaFormat)
-    
-    implementation(libs.androidx.ktx)
+
+    implementation(libs.composite.javac)
+    implementation(libs.composite.javapoet)
+    implementation(libs.composite.googleJavaFormat)
+
+    implementation(libs.androidx.core.ktx)
     implementation(libs.common.kotlin)
-    
-    testImplementation(projects.lsp.testing)
-    testImplementation(projects.common)
-    testImplementation(projects.actions)
-    testImplementation(projects.subprojects.javac)
-    testImplementation(libs.tests.junit)
-    testImplementation(libs.tests.google.truth)
-    testImplementation(libs.tests.robolectric)
-    androidTestImplementation(libs.tests.androidx.junit)
-    androidTestImplementation(libs.tests.androidx.espresso)
-    androidTestImplementation(libs.tests.google.truth)
+
+    testImplementation(projects.testing.lsp)
 }

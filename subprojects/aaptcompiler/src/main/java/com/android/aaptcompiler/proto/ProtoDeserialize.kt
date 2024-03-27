@@ -1,5 +1,6 @@
 package com.android.aaptcompiler.proto
 
+import androidx.collection.MutableIntObjectMap
 import com.android.aapt.ConfigurationOuterClass
 import com.android.aapt.Resources
 import com.android.aaptcompiler.AllowNew
@@ -40,8 +41,8 @@ import com.android.aaptcompiler.isValidId
 import com.android.aaptcompiler.parseResourceName
 import com.android.aaptcompiler.resourceIdFromParts
 import com.android.aaptcompiler.resourceTypeFromTag
-import com.itsaky.androidide.layoutlib.resources.ResourceVisibility
 import com.android.utils.ILogger
+import com.itsaky.androidide.layoutlib.resources.ResourceVisibility
 
 fun deserializeConfigFromPb(
   config: ConfigurationOuterClass.Configuration, logger: ILogger?): ConfigDescription? {
@@ -638,7 +639,7 @@ fun deserializePackageFromPb(
   val packageId =
     if (original.hasPackageId()) original.getPackageId().getId().toByte() else 0.toByte()
 
-  val idIndex = mutableMapOf<Int, ResourceName>()
+  val idIndex = MutableIntObjectMap<ResourceName>()
 
   val resourcePackage =
     table.createPackageAllowingDuplicateNames(original.getPackageName(), packageId)
@@ -725,8 +726,7 @@ fun deserializePackageFromPb(
         group.getTypeId().getId().toByte(),
         entry.getEntryId().getId().toShort())
       if (resourceId.isValidId()) {
-        idIndex[resourceId] =
-          ResourceName(resourcePackage.name, resourceGroup.type, resourceEntry.name)
+        idIndex.put(resourceId, ResourceName(resourcePackage.name, resourceGroup.type, resourceEntry.name))
       }
 
       for (configValue in entry.getConfigValueList()) {

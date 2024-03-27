@@ -45,8 +45,6 @@ import com.itsaky.androidide.lsp.models.MethodCompletionData
 import com.itsaky.androidide.lsp.snippets.ISnippet
 import com.itsaky.androidide.preferences.utils.indentationString
 import com.itsaky.androidide.progress.ProgressManager.Companion.abortIfCancelled
-import com.itsaky.androidide.utils.ILogger
-import java.nio.file.Path
 import jdkx.lang.model.element.Element
 import jdkx.lang.model.element.ElementKind.ANNOTATION_TYPE
 import jdkx.lang.model.element.ElementKind.CLASS
@@ -70,6 +68,9 @@ import jdkx.lang.model.element.TypeElement
 import jdkx.lang.model.element.VariableElement
 import openjdk.source.tree.Tree
 import openjdk.source.util.TreePath
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import java.nio.file.Path
 
 /**
  * Completion provider for Java source code.
@@ -82,9 +83,13 @@ abstract class IJavaCompletionProvider(
   compiler: JavaCompilerService,
   settings: IServerSettings,
 ) : BaseJavaServiceProvider(completingFile, compiler, settings) {
-  protected val log: ILogger = ILogger.newInstance(javaClass.name)
   protected lateinit var filePackage: String
   protected lateinit var fileImports: Set<String>
+  
+  companion object {
+    @JvmStatic
+    protected val log: Logger = LoggerFactory.getLogger(IJavaCompletionProvider::class.java)
+  }
 
   open fun complete(
     task: CompileTask,
@@ -151,7 +156,7 @@ abstract class IJavaCompletionProvider(
     abortIfCancelled()
     abortCompletionIfCancelled()
     val item = JavaCompletionItem()
-    item.setLabel(keyword)
+    item.ideLabel = keyword
     item.completionKind = KEYWORD
     item.detail = "keyword"
     item.ideSortText = keyword
@@ -170,10 +175,10 @@ abstract class IJavaCompletionProvider(
     abortCompletionIfCancelled()
     val first = overloads[0]
     val item = JavaCompletionItem()
-    item.setLabel(first.simpleName.toString())
+    item.ideLabel = first.simpleName.toString()
     item.completionKind = CompletionItemKind.METHOD
     item.detail = printMethodDetail(first)
-    item.ideSortText = item.label.toString()
+    item.ideSortText = item.ideLabel
     item.matchLevel = matchLevel
     item.overrideTypeText = EditHelper.printType(first.returnType)
     val data = data(task, first, overloads.size)
@@ -221,11 +226,11 @@ abstract class IJavaCompletionProvider(
     abortIfCancelled()
     abortCompletionIfCancelled()
     val item = JavaCompletionItem()
-    item.setLabel(element.simpleName.toString())
+    item.ideLabel = element.simpleName.toString()
     item.completionKind = kind(element)
     item.detail = element.toString()
     item.data = data(task, element, 1)
-    item.ideSortText = item.label.toString()
+    item.ideSortText = item.ideLabel
     item.matchLevel = matchLevel
 
     if (element is VariableElement) {
@@ -251,10 +256,10 @@ abstract class IJavaCompletionProvider(
     abortIfCancelled()
     abortCompletionIfCancelled()
     val item = JavaCompletionItem()
-    item.setLabel(simpleName(className).toString())
+    item.ideLabel = simpleName(className).toString()
     item.completionKind = CompletionItemKind.CLASS
     item.detail = packageName(className).toString()
-    item.ideSortText = item.label.toString()
+    item.ideSortText = item.ideLabel
     item.matchLevel = matchLevel
     item.data = ClassCompletionData(className)
 
@@ -284,7 +289,7 @@ abstract class IJavaCompletionProvider(
       packageName = " "
     }
     return JavaCompletionItem().apply {
-      setLabel(simpleName)
+      this.ideLabel = simpleName
       this.detail = packageName
       this.insertText = simpleName
       this.completionKind = MODULE
@@ -300,7 +305,7 @@ abstract class IJavaCompletionProvider(
     indent: Int
   ): CompletionItem {
     return JavaCompletionItem().apply {
-      this.label = snippet.prefix
+      this.ideLabel = snippet.prefix
       this.detail = snippet.description
       this.completionKind = CompletionItemKind.SNIPPET
       this.matchLevel = matchLevel

@@ -17,8 +17,14 @@
 
 package com.itsaky.androidide.actions
 
+import android.graphics.ColorFilter
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.drawable.Drawable
+import android.view.Menu
 import android.view.View
+import androidx.annotation.CallSuper
+import com.itsaky.androidide.utils.resolveAttr
 
 /**
  * An action that can be registered using the [ActionsRegistry]
@@ -28,20 +34,65 @@ import android.view.View
  */
 interface ActionItem {
 
+  /**
+   * A unique ID for this action.
+   */
   val id: String
+
+  /**
+   * The label for this action.
+   */
   var label: String
+
+  /**
+   * Whether the action should be visible to the user or not.
+   */
   var visible: Boolean
+
+  /**
+   * Whether the action should be enabled.
+   */
   var enabled: Boolean
+
+  /**
+   * Icon for this action.
+   */
   var icon: Drawable?
+
+  /**
+   * Whether the [execAction] method of this action must be executed on UI thread.
+   */
   var requiresUIThread: Boolean
+
+  /**
+   * The location of this [ActionItem].
+   */
   var location: Location
+
+  /**
+   * The order of this action item. This is used only at some locations and not everywhere.
+   *
+   * @see android.view.MenuItem.getOrder
+   */
+  val order: Int
+    get() = Menu.NONE
+
+  /**
+   * The item ID that will be set to the menu item.
+   */
+  val itemId: Int
+    get() = id.hashCode()
 
   /**
    * Prepare the action. Subclasses can modify the visual properties of this action here.
    *
    * @param data The data containing various information about the event.
    */
-  fun prepare(data: ActionData)
+  @CallSuper
+  fun prepare(data: ActionData) {
+    visible = true
+    enabled = true
+  }
 
   /**
    * Execute the action. The action executed in a background thread by default.
@@ -49,7 +100,7 @@ interface ActionItem {
    * @param data The data containing various information about the event.
    * @return `true` if this action was executed successfully, `false` otherwise.
    */
-  fun execAction(data: ActionData): Any
+  suspend fun execAction(data: ActionData): Any
 
   /**
    * Called just after the [execAction] method executes **successfully** (i.e. returns `true`).
@@ -79,14 +130,32 @@ interface ActionItem {
    */
   fun createActionView(data: ActionData): View? = null
 
+  /**
+   * Creates the color filter for this action's icon drawable.
+   *
+   * The default implementation returns a [PorterDuffColorFilter] instance with color [R.attr.colorOnSurface].
+   */
+  fun createColorFilter(data: ActionData): ColorFilter? {
+    return data.getContext()?.let {
+      PorterDuffColorFilter(it.resolveAttr(R.attr.colorOnSurface), PorterDuff.Mode.SRC_ATOP)
+    }
+  }
+
   /** Location where an action item will be shown. */
   enum class Location(val id: String) {
 
     /** Location marker for action items shown in editor activity's toolbar. */
     EDITOR_TOOLBAR("ide.editor.toolbar"),
 
-    /** Location marker for action items shown in UI Designer activity's toolbar. */
-    UI_DESIGNER_TOOLBAR("ide.uidesigner.toolbar"),
+    /**
+     * Location marker for action items shown in editor activity's sidebar (navigation rail in the drawer).
+     */
+    EDITOR_SIDEBAR("ide.editor.sidebar"),
+
+    /**
+     * Location marker for action items shown in the default category of editor activity's sidebar (navigation rail in the drawer).
+     */
+    EDITOR_SIDEBAR_DEFAULT_ITEMS("ide.editor.sidebar.defaultItems"),
 
     /** Location marker for action items shown in editor's text action menu. */
     EDITOR_TEXT_ACTIONS("ide.editor.textActions"),
@@ -104,14 +173,17 @@ interface ActionItem {
      * Location marker for action items that are shown when the files in the editor activity's file
      * tree are long clicked.
      */
-    EDITOR_FILE_TREE("ide.editor.fileTree");
+    EDITOR_FILE_TREE("ide.editor.fileTree"),
+
+    /** Location marker for action items shown in UI Designer activity's toolbar. */
+    UI_DESIGNER_TOOLBAR("ide.uidesigner.toolbar");
 
     override fun toString(): String {
       return id
     }
 
     fun forId(id: String): Location {
-      return values().first { it.id == id }
+      return entries.first { it.id == id }
     }
   }
 }

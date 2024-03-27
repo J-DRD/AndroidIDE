@@ -15,6 +15,8 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import com.itsaky.androidide.build.config.BuildConfig
+
 plugins {
   id("com.android.library")
   id("org.jetbrains.kotlin.android")
@@ -35,18 +37,12 @@ dependencies {
   implementation(projects.preferences)
   implementation(projects.subprojects.projects)
   implementation(libs.androidx.annotation)
-  implementation(libs.androidx.ktx)
+  implementation(libs.androidx.core.ktx)
   implementation(libs.google.auto.service.annotations)
 
-  testImplementation(projects.common)
   testImplementation(projects.templatesApi)
   testImplementation(projects.lsp.api)
   testImplementation(projects.preferences)
-  testImplementation(projects.shared)
-  testImplementation(projects.subprojects.toolingApiTesting)
-  testImplementation(libs.tests.androidx.test.core)
-  testImplementation(libs.tests.google.truth)
-  testImplementation(libs.tests.junit)
-  testImplementation(libs.tests.mockk)
-  testImplementation(libs.tests.robolectric)
+  testImplementation(projects.testing.unit)
+  testImplementation(projects.testing.tooling)
 }

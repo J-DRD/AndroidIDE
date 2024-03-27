@@ -44,19 +44,17 @@ import com.itsaky.androidide.R
 import com.itsaky.androidide.adapters.DiagnosticsAdapter
 import com.itsaky.androidide.adapters.EditorBottomSheetTabAdapter
 import com.itsaky.androidide.adapters.SearchListAdapter
-import com.itsaky.androidide.databinding.LayoutBottomActionBinding
 import com.itsaky.androidide.databinding.LayoutEditorBottomSheetBinding
-import com.itsaky.androidide.fragments.ShareableOutputFragment
+import com.itsaky.androidide.fragments.output.ShareableOutputFragment
 import com.itsaky.androidide.models.LogLine
 import com.itsaky.androidide.resources.R.string
 import com.itsaky.androidide.tasks.TaskExecutor.CallbackWithError
 import com.itsaky.androidide.tasks.TaskExecutor.executeAsync
 import com.itsaky.androidide.tasks.TaskExecutor.executeAsyncProvideError
-import com.itsaky.androidide.ui.editor.CodeEditorView
-import com.itsaky.androidide.utils.ILogger
 import com.itsaky.androidide.utils.IntentUtils.shareFile
 import com.itsaky.androidide.utils.Symbols.forFile
 import com.itsaky.androidide.utils.flashError
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.IOException
 import java.nio.charset.StandardCharsets
@@ -79,22 +77,22 @@ constructor(
   defStyleRes: Int = 0,
 ) : RelativeLayout(context, attrs, defStyleAttr, defStyleRes) {
 
-  private var action: LayoutBottomActionBinding
-  private var symbolInput: SymbolInputView
   private val collapsedHeight: Float by lazy {
     val localContext = getContext() ?: return@lazy 0f
     localContext.resources.getDimension(R.dimen.editor_sheet_collapsed_height)
   }
 
-  @JvmField var binding: LayoutEditorBottomSheetBinding
+  @JvmField
+  var binding: LayoutEditorBottomSheetBinding
 
   val pagerAdapter: EditorBottomSheetTabAdapter
 
-  private val log = ILogger.newInstance("EditorBottomSheet")
-
   companion object {
-    const val CHILD_SYMBOL_INPUT = 0
-    const val CHILD_HEADER = 1
+
+    private val log = LoggerFactory.getLogger(EditorBottomSheet::class.java)
+
+    const val CHILD_HEADER = 0
+    const val CHILD_SYMBOL_INPUT = 1
     const val CHILD_ACTION = 2
   }
 
@@ -107,7 +105,7 @@ constructor(
 
     mediator.attach()
     binding.pager.isUserInputEnabled = false
-    binding.pager.offscreenPageLimit = pagerAdapter.itemCount - 1 // DO not remove any views
+    binding.pager.offscreenPageLimit = pagerAdapter.itemCount - 1 // Do not remove any views
 
     binding.tabs.addOnTabSelectedListener(
       object : OnTabSelectedListener {
@@ -131,14 +129,15 @@ constructor(
       val fragment = pagerAdapter.getFragmentAtIndex(binding.tabs.selectedTabPosition)
 
       if (fragment !is ShareableOutputFragment) {
-        log.error("Unknown fragment:", fragment)
+        log.error("Unknown fragment: {}", fragment)
         return@setOnClickListener
       }
 
       val filename = fragment.getFilename()
 
       @Suppress("DEPRECATION")
-      val progress = android.app.ProgressDialog.show(context, null, context.getString(string.please_wait))
+      val progress = android.app.ProgressDialog.show(context, null,
+        context.getString(string.please_wait))
       executeAsync(fragment::getContent) {
         progress.dismiss()
         shareText(it, filename)
@@ -149,7 +148,7 @@ constructor(
     binding.clearFab.setOnClickListener {
       val fragment: Fragment = pagerAdapter.getFragmentAtIndex(binding.tabs.selectedTabPosition)
       if (fragment !is ShareableOutputFragment) {
-        log.error("Unknown fragment:", fragment)
+        log.error("Unknown fragment: {}", fragment)
         return@setOnClickListener
       }
       (fragment as ShareableOutputFragment).clearOutput()
@@ -170,12 +169,7 @@ constructor(
 
     val inflater = LayoutInflater.from(context)
     binding = LayoutEditorBottomSheetBinding.inflate(inflater)
-    action = LayoutBottomActionBinding.inflate(inflater)
-    symbolInput = SymbolInputView(context)
     pagerAdapter = EditorBottomSheetTabAdapter(context)
-
-    binding.headerContainer.addView(symbolInput, CHILD_SYMBOL_INPUT, LayoutParams(-1, -2))
-    binding.headerContainer.addView(action.root, CHILD_ACTION, LayoutParams(-1, -2))
     binding.pager.adapter = pagerAdapter
 
     removeAllViews()
@@ -214,11 +208,11 @@ constructor(
   }
 
   fun setActionText(text: CharSequence) {
-    action.actionText.text = text
+    binding.bottomAction.actionText.text = text
   }
 
   fun setActionProgress(progress: Int) {
-    action.progress.setProgressCompat(progress, true)
+    binding.bottomAction.progress.setProgressCompat(progress, true)
   }
 
   fun appendApkLog(line: LogLine) {
@@ -234,11 +228,11 @@ constructor(
   }
 
   fun handleDiagnosticsResultVisibility(errorVisible: Boolean) {
-    runOnUiThread { pagerAdapter.diagnosticsFragment?.handleResultVisibility(errorVisible) }
+    runOnUiThread { pagerAdapter.diagnosticsFragment?.isEmpty = errorVisible }
   }
 
   fun handleSearchResultVisibility(errorVisible: Boolean) {
-    runOnUiThread { pagerAdapter.searchResultFragment?.handleResultVisibility(errorVisible) }
+    runOnUiThread { pagerAdapter.searchResultFragment?.isEmpty = errorVisible }
   }
 
   fun setDiagnosticsAdapter(adapter: DiagnosticsAdapter) {
@@ -250,8 +244,7 @@ constructor(
   }
 
   fun refreshSymbolInput(editor: CodeEditorView) {
-    symbolInput.bindEditor(editor.editor)
-    symbolInput.setSymbols(*forFile(editor.file))
+    binding.symbolInput.refresh(editor.editor, forFile(editor.file))
   }
 
   fun onSoftInputChanged() {
@@ -259,25 +252,24 @@ constructor(
       return
     }
 
+    binding.symbolInput.itemAnimator?.endAnimations()
+
+    TransitionManager.beginDelayedTransition(
+      binding.root,
+      MaterialSharedAxis(MaterialSharedAxis.Y, false)
+    )
+
     val activity = context as Activity
     if (KeyboardUtils.isSoftInputVisible(activity)) {
-      TransitionManager.beginDelayedTransition(
-        binding.root,
-        MaterialSharedAxis(MaterialSharedAxis.Y, false)
-      )
       binding.headerContainer.displayedChild = CHILD_SYMBOL_INPUT
     } else {
-      TransitionManager.beginDelayedTransition(
-        binding.root,
-        MaterialSharedAxis(MaterialSharedAxis.Y, false)
-      )
       binding.headerContainer.displayedChild = CHILD_HEADER
     }
   }
 
   fun setStatus(text: CharSequence, @GravityInt gravity: Int) {
     runOnUiThread {
-      binding.let {
+      binding.buildStatus.let {
         it.statusText.gravity = gravity
         it.statusText.text = text
       }
@@ -300,7 +292,8 @@ constructor(
       flashError(context.getString(string.msg_output_text_extraction_failed))
       return
     }
-    val pd = android.app.ProgressDialog.show(context, null, context.getString(string.please_wait), true, false)
+    val pd = android.app.ProgressDialog.show(context, null, context.getString(string.please_wait),
+      true, false)
     executeAsyncProvideError(
       Callable { writeTempFile(text, type) },
       CallbackWithError<File> { result: File?, error: Throwable? ->

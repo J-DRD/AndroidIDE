@@ -19,21 +19,21 @@ package com.itsaky.androidide.actions.etc
 
 import android.content.Context
 import androidx.core.content.ContextCompat
-import com.blankj.utilcode.util.ThreadUtils
+import androidx.lifecycle.lifecycleScope
 import com.itsaky.androidide.R
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorActivityAction
 import com.itsaky.androidide.editor.schemes.IDEColorSchemeProvider
-import com.itsaky.androidide.tasks.executeAsyncProvideError
-import com.itsaky.androidide.tasks.executeWithProgress
-import com.itsaky.androidide.utils.ILogger
+import com.itsaky.androidide.tasks.launchAsyncWithProgress
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Action which reloads the editor color schemes.
  *
  * @author Akash Yadav
  */
-class ReloadColorSchemesAction(context: Context) : EditorActivityAction() {
+class ReloadColorSchemesAction(context: Context, override val order: Int) : EditorActivityAction() {
 
   override val id: String = "ide.editor.colorScheme.reload"
 
@@ -42,23 +42,21 @@ class ReloadColorSchemesAction(context: Context) : EditorActivityAction() {
   // the UI thread
   override var requiresUIThread: Boolean = true
 
-  private val log = ILogger.newInstance("ReloadColorSchemesAction")
-
   init {
     label = context.getString(R.string.title_reload_color_schemes)
     icon = ContextCompat.getDrawable(context, R.drawable.ic_reload)
   }
 
-  override fun execAction(data: ActionData): Boolean {
+  override suspend fun execAction(data: ActionData): Boolean {
     val context = data.requireActivity()
-    context.executeWithProgress { dialog ->
-      executeAsyncProvideError(IDEColorSchemeProvider::reload) { _, error ->
-        if (error != null) {
-          log.error("Failed to load the color schemes", error)
-          return@executeAsyncProvideError
-        }
-
-        ThreadUtils.runOnUiThread(dialog::dismiss)
+    context.lifecycleScope.launchAsyncWithProgress(
+      context = Dispatchers.Default,
+      configureFlashbar = { builder, _ ->
+        builder.message(R.string.please_wait)
+      }) { flashbar, _ ->
+      IDEColorSchemeProvider.reload()
+      withContext(Dispatchers.Main) {
+        flashbar.dismiss()
       }
     }
     return true

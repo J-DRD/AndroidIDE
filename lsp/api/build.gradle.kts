@@ -15,6 +15,8 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import com.itsaky.androidide.build.config.BuildConfig
+
 plugins {
     id("com.android.library")
     id("kotlin-android")
@@ -34,13 +36,14 @@ kapt {
 dependencies {
     
     kapt(projects.annotationProcessors)
-    
+
+    implementation(libs.composite.fuzzysearch)
+
     implementation(libs.common.editor)
-    implementation(projects.subprojects.fuzzysearch)
     implementation(projects.eventbusEvents)
     
     implementation(libs.androidx.appcompat)
-    implementation(libs.androidx.ktx)
+    implementation(libs.androidx.core.ktx)
     implementation(libs.common.kotlin)
     implementation(libs.common.utilcode)
     implementation(libs.google.material)

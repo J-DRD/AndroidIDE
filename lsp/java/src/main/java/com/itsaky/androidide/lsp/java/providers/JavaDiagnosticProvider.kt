@@ -24,8 +24,8 @@ import com.itsaky.androidide.lsp.models.DiagnosticResult
 import com.itsaky.androidide.progress.ProgressManager
 import com.itsaky.androidide.progress.ProgressManager.Companion.abortIfCancelled
 import com.itsaky.androidide.projects.FileManager
-import com.itsaky.androidide.projects.ProjectManager
-import com.itsaky.androidide.utils.ILogger
+import com.itsaky.androidide.projects.IProjectManager
+import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
@@ -37,20 +37,25 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class JavaDiagnosticProvider {
 
-  private val log = ILogger.newInstance(javaClass.simpleName)
   private val analyzeTimestamps = mutableMapOf<Path, Instant>()
   private var cachedDiagnostics = DiagnosticResult.NO_UPDATE
   private var analyzing = AtomicBoolean(false)
   private var analyzingThread: AnalyzingThread? = null
 
+  companion object {
+
+    private val log = LoggerFactory.getLogger(JavaDiagnosticProvider::class.java)
+  }
+
   fun analyze(file: Path): DiagnosticResult {
 
-    val module = ProjectManager.findModuleForFile(file) ?: return DiagnosticResult.NO_UPDATE
+    val module = IProjectManager.getInstance().findModuleForFile(file, false)
+      ?: return DiagnosticResult.NO_UPDATE
     val compiler = JavaCompilerService(module)
 
     abortIfCancelled()
 
-    log.debug("Analyzing:", file)
+    log.debug("Analyzing: {}", file)
 
     val modifiedAt = FileManager.getLastModified(file)
     val analyzedAt = analyzeTimestamps[file]
@@ -60,23 +65,25 @@ class JavaDiagnosticProvider {
       return cachedDiagnostics
     }
 
-    if (analyzing.get() && analyzingThread != null) {
-      log.debug("Cancelling currently analyzing thread...")
-      ProgressManager.instance.cancel(analyzingThread!!)
-      analyzingThread = null
+    analyzingThread?.let { analyzingThread ->
+      if (analyzing.get()) {
+        log.debug("Cancelling currently analyzing thread...")
+        ProgressManager.instance.cancel(analyzingThread)
+        this.analyzingThread = null
+      }
     }
 
     analyzing.set(true)
 
-    analyzingThread = AnalyzingThread(compiler, file)
-    analyzingThread!!.start()
-    analyzingThread!!.join()
+    val analyzingThread = AnalyzingThread(compiler, file).also {
+      analyzingThread = it
+      it.start()
+      it.join()
+    }
 
-    val result = analyzingThread!!.result
-
-    analyzingThread = null
-
-    return result
+    return analyzingThread.result.also {
+      this.analyzingThread = null
+    }
   }
 
   fun isAnalyzing(): Boolean {
@@ -107,7 +114,7 @@ class JavaDiagnosticProvider {
           }
         )
     return result.also {
-      log.info("Analyze file completed. Found ${result.diagnostics.size} diagnostic items")
+      log.info("Analyze file completed. Found {} diagnostic items", result.diagnostics.size)
     }
   }
 
@@ -118,7 +125,8 @@ class JavaDiagnosticProvider {
 
   inner class AnalyzingThread(val compiler: JavaCompilerService, val file: Path) :
     Thread("JavaAnalyzerThread") {
-    lateinit var result: DiagnosticResult
+
+    var result: DiagnosticResult = DiagnosticResult.NO_UPDATE
 
     fun cancel() {
       ProgressManager.instance.cancel(this)
@@ -127,18 +135,18 @@ class JavaDiagnosticProvider {
     override fun run() {
       result =
         try {
-            compiler.compile(file).get { task -> doAnalyze(file, task) }
-          } catch (err: Throwable) {
-            if (CancelChecker.isCancelled(err)) {
-              log.error("Analyze request cancelled")
-            } else {
-              log.warn("Unable to analyze file", err)
-            }
-            DiagnosticResult.NO_UPDATE
-          } finally {
-            compiler.destroy()
-            analyzing.set(false)
+          compiler.compile(file).get { task -> doAnalyze(file, task) }
+        } catch (err: Throwable) {
+          if (CancelChecker.isCancelled(err)) {
+            log.error("Analyze request cancelled")
+          } else {
+            log.warn("Unable to analyze file", err)
           }
+          DiagnosticResult.NO_UPDATE
+        } finally {
+          compiler.destroy()
+          analyzing.set(false)
+        }
           .also {
             cachedDiagnostics = it
             analyzeTimestamps[file] = Instant.now()

@@ -17,23 +17,21 @@
  */
 package com.itsaky.androidide.adapters;
 
-import static com.itsaky.androidide.preferences.utils.EditorUtilKt.getIndentationString;
 import static com.itsaky.androidide.utils.ResourceUtilsKt.resolveAttr;
 
 import android.annotation.SuppressLint;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
-
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-
 import com.itsaky.androidide.R;
 import com.itsaky.androidide.databinding.LayoutSymbolItemBinding;
-import com.itsaky.androidide.ui.SymbolInputView.Symbol;
 import com.itsaky.androidide.editor.ui.IDEEditor;
-
+import com.itsaky.androidide.models.Symbol;
+import io.github.rosemoe.sora.widget.SelectionMovement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class SymbolInputAdapter extends RecyclerView.Adapter<SymbolInputAdapter.VH> {
 
@@ -49,24 +47,40 @@ public class SymbolInputAdapter extends RecyclerView.Adapter<SymbolInputAdapter.
     pairs.add('>');
   }
 
-  private final IDEEditor editor;
-  private Symbol[] symbols;
+  private IDEEditor editor;
+  private final List<Symbol> symbols;
 
   public SymbolInputAdapter(IDEEditor editor) {
     this(editor, null);
   }
 
-  public SymbolInputAdapter(IDEEditor editor, Symbol[] symbols) {
+  public SymbolInputAdapter(IDEEditor editor, List<Symbol> symbols) {
     this.editor = editor;
-    this.symbols = symbols == null ? new Symbol[0] : symbols;
+    this.symbols = new ArrayList<>();
+    this.updateItems(symbols);
+  }
+
+  private void updateItems(List<Symbol> symbols) {
+    if (symbols == null) {
+      return;
+    }
+
+    this.symbols.clear();
+    this.symbols.addAll(symbols);
+    this.symbols.removeIf(Objects::isNull);
   }
 
   @SuppressLint("NotifyDataSetChanged")
-  public void setSymbols(boolean notify, Symbol... symbols) {
-    this.symbols = symbols;
-    if (notify) {
-      notifyDataSetChanged();
+  public void refresh(IDEEditor editor, List<Symbol> newSymbols) {
+    this.editor = Objects.requireNonNull(editor);
+
+    if (this.symbols.equals(newSymbols)) {
+      // no need to update symbols
+      return;
     }
+
+    updateItems(newSymbols);
+    notifyDataSetChanged();
   }
 
   @NonNull
@@ -78,8 +92,7 @@ public class SymbolInputAdapter extends RecyclerView.Adapter<SymbolInputAdapter.
 
   @Override
   public void onBindViewHolder(@NonNull VH holder, int position) {
-    if (symbols == null || symbols[position] == null) return;
-    final Symbol symbol = symbols[position];
+    final Symbol symbol = symbols.get(position);
     holder.binding.symbol.setText(symbol.getLabel());
     holder.binding.symbol.setTextColor(
         resolveAttr(holder.binding.symbol.getContext(), R.attr.colorOnSurface));
@@ -89,7 +102,7 @@ public class SymbolInputAdapter extends RecyclerView.Adapter<SymbolInputAdapter.
 
   @Override
   public int getItemCount() {
-    return symbols == null ? 0 : symbols.length;
+    return symbols.size();
   }
 
   void insertSymbol(String text, int selectionOffset) {
@@ -104,8 +117,8 @@ public class SymbolInputAdapter extends RecyclerView.Adapter<SymbolInputAdapter.
     }
 
     if ("\t".equals(text)) {
-      text = getIndentationString();
-      selectionOffset = text.length();
+      editor.indentOrCommitTab();
+      return;
     }
 
     var cur = editor.getText().getCursor();
@@ -120,7 +133,7 @@ public class SymbolInputAdapter extends RecyclerView.Adapter<SymbolInputAdapter.
         && text.length() == 1
         && text.charAt(0) == editor.getText().charAt(cur.getLeftLine(), cur.getLeftColumn())
         && pairs.contains(text.charAt(0))) {
-      editor.moveSelectionRight();
+      editor.moveSelection(SelectionMovement.RIGHT);
     } else {
       editor.commitText(text);
       if (selectionOffset != text.length()) {
@@ -131,6 +144,7 @@ public class SymbolInputAdapter extends RecyclerView.Adapter<SymbolInputAdapter.
   }
 
   public static class VH extends RecyclerView.ViewHolder {
+
     LayoutSymbolItemBinding binding;
 
     public VH(LayoutSymbolItemBinding binding) {

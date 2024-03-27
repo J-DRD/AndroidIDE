@@ -17,12 +17,20 @@
 
 package com.itsaky.androidide.logsender.utils;
 
+import static com.itsaky.androidide.logsender.LogSender.PACKAGE_ANDROIDIDE;
+
 import android.app.Application;
+import android.app.BackgroundServiceStartNotAllowedException;
 import android.content.ContentProvider;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Build.VERSION;
+import android.os.Build.VERSION_CODES;
 import com.itsaky.androidide.logsender.LogSender;
+import com.itsaky.androidide.logsender.LogSenderService;
 
 /**
  * Content providers are loaded before the application class is created. {@link LogSenderInstaller}
@@ -40,14 +48,36 @@ public class LogSenderInstaller extends ContentProvider {
   @Override
   public boolean onCreate() {
     final Application application = ((Application) getContext());
-    LogSender.install(application);
+    if (PACKAGE_ANDROIDIDE.equals(application.getPackageName())) {
+      // do not send logs to self
+      return true;
+    }
+
+    try {
+      final Intent intent = new Intent(application, LogSenderService.class);
+      intent.setAction(LogSenderService.ACTION_START_SERVICE);
+
+      if (VERSION.SDK_INT >= VERSION_CODES.O) {
+        application.startForegroundService(intent);
+      } else {
+        application.startService(intent);
+      }
+    } catch (Exception e) {
+
+      // starting a background service is not allowed on Android 12+
+      // ignore the BackgroundServiceStartNotAllowedException in such cases
+      if (VERSION.SDK_INT < VERSION_CODES.S
+          || !(e instanceof BackgroundServiceStartNotAllowedException)) {
+        throw new RuntimeException(e);
+      }
+    }
     return true;
   }
 
 
   @Override
   public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
-                      String sortOrder
+      String sortOrder
   ) {
     return null;
   }

@@ -15,28 +15,38 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import com.itsaky.androidide.build.config.BuildConfig
+
 plugins {
   id("com.android.library")
   id("com.vanniktech.maven.publish.base")
 }
 
+description = "LogSender is used to read logs from applications built with AndroidIDE"
+
 android {
   namespace = "${BuildConfig.packageName}.logsender"
-  buildFeatures.aidl = true
 
   defaultConfig {
     minSdk = 16
+
+    vectorDrawables {
+      useSupportLibrary = true
+    }
   }
 
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
   }
+
+  buildFeatures.apply {
+    aidl = true
+    viewBinding = false
+  }
 }
 
 dependencies {
-  api(projects.logger)
-
   testImplementation(libs.tests.junit)
   testImplementation(libs.tests.robolectric)
   testImplementation(libs.tests.google.truth)

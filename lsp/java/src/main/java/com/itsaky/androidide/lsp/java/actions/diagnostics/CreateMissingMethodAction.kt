@@ -22,29 +22,34 @@ import com.itsaky.androidide.actions.markInvisible
 import com.itsaky.androidide.actions.requireFile
 import com.itsaky.androidide.actions.requirePath
 import com.itsaky.androidide.lsp.java.JavaCompilerProvider
-import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.lsp.java.actions.BaseJavaCodeAction
 import com.itsaky.androidide.lsp.java.models.DiagnosticCode
 import com.itsaky.androidide.lsp.java.rewrite.CreateMissingMethod
 import com.itsaky.androidide.lsp.java.utils.CodeActionUtils.findPosition
-import com.itsaky.androidide.projects.ProjectManager
-import com.itsaky.androidide.utils.ILogger
+import com.itsaky.androidide.projects.IProjectManager
+import com.itsaky.androidide.resources.R
+import org.slf4j.LoggerFactory
 
 /** @author Akash Yadav */
 class CreateMissingMethodAction : BaseJavaCodeAction() {
-  override val id: String = "lsp_java_createMissingMethod"
+
+  override val id: String = "ide.editor.lsp.java.diagnostics.createMissingMethod"
   override var label: String = ""
   private val diagnosticCode = DiagnosticCode.MISSING_METHOD.id
-  private val log = ILogger.newInstance(javaClass.simpleName)
 
   override val titleTextRes: Int = R.string.action_create_missing_method
+
+  companion object {
+
+    private val log = LoggerFactory.getLogger(CreateMissingMethodAction::class.java)
+  }
 
   override fun prepare(data: ActionData) {
     super.prepare(data)
 
     if (
       !visible ||
-        !data.hasRequiredData( com.itsaky.androidide.lsp.models.DiagnosticItem::class.java)
+      !data.hasRequiredData(com.itsaky.androidide.lsp.models.DiagnosticItem::class.java)
     ) {
       markInvisible()
       return
@@ -57,10 +62,11 @@ class CreateMissingMethodAction : BaseJavaCodeAction() {
     }
   }
 
-  override fun execAction(data: ActionData): Any {
+  override suspend fun execAction(data: ActionData): Any {
     val diagnostic = data[com.itsaky.androidide.lsp.models.DiagnosticItem::class.java]!!
     val compiler =
-      JavaCompilerProvider.get(ProjectManager.findModuleForFile(data.requireFile()) ?: return Any())
+      JavaCompilerProvider.get(
+        IProjectManager.getInstance().findModuleForFile(data.requireFile(), false) ?: return Any())
     val file = data.requirePath()
     return compiler.compile(file).get {
       CreateMissingMethod(file, findPosition(it, diagnostic.range.start))

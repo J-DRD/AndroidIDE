@@ -2,7 +2,9 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
   android:layout_width="match_parent"
   android:layout_height="match_parent"
-  android:padding="16dp">
+  android:paddingBottom="16dp"
+  android:paddingStart="16dp"
+  android:paddingEnd="16dp">
 
   <HorizontalScrollView
     android:id="@+id/horizontal_croll"
@@ -17,4 +19,3 @@
     android:layout_centerInParent="true" />
 
 </RelativeLayout>
-

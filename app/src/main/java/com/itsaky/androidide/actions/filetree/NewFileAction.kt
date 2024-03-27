@@ -27,7 +27,7 @@ import com.itsaky.androidide.adapters.viewholders.FileTreeViewHolder
 import com.itsaky.androidide.databinding.LayoutCreateFileJavaBinding
 import com.itsaky.androidide.eventbus.events.file.FileCreationEvent
 import com.itsaky.androidide.preferences.databinding.LayoutDialogTextInputBinding
-import com.itsaky.androidide.projects.ProjectManager
+import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.utils.DialogUtils
 import com.itsaky.androidide.utils.Environment
@@ -38,6 +38,7 @@ import com.itsaky.androidide.utils.flashSuccess
 import com.unnamed.b.atv.model.TreeNode
 import jdkx.lang.model.SourceVersion
 import org.greenrobot.eventbus.EventBus
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.Objects
 import java.util.regex.Pattern
@@ -47,7 +48,7 @@ import java.util.regex.Pattern
  *
  * @author Akash Yadav
  */
-class NewFileAction(context: Context) :
+class NewFileAction(context: Context, override val order: Int) :
   BaseDirNodeAction(
     context = context,
     labelRes = R.string.new_file,
@@ -57,18 +58,26 @@ class NewFileAction(context: Context) :
   override val id: String = "ide.editor.fileTree.newFile"
 
   companion object {
+
     const val RES_PATH_REGEX = "/.*/src/.*/res"
     const val LAYOUT_RES_PATH_REGEX = "/.*/src/.*/res/layout"
     const val MENU_RES_PATH_REGEX = "/.*/src/.*/res/menu"
     const val DRAWABLE_RES_PATH_REGEX = "/.*/src/.*/res/drawable"
     const val JAVA_PATH_REGEX = "/.*/src/.*/java"
+
+    private val log = LoggerFactory.getLogger(NewFileAction::class.java)
   }
 
-  override fun execAction(data: ActionData) {
+  override suspend fun execAction(data: ActionData) {
     val context = data.requireActivity()
     val file = data.requireFile()
     val node = data.getTreeNode()
-    createNewFile(context, node, file, false)
+    try {
+      createNewFile(context, node, file, false)
+    } catch (e: Exception) {
+      log.error("Failed to create new file", e)
+      flashError(e.cause?.message ?: e.message)
+    }
   }
 
   private fun createNewFile(
@@ -82,7 +91,7 @@ class NewFileAction(context: Context) :
       return
     }
 
-    val projectDir = ProjectManager.getProjectDirPath()
+    val projectDir = IProjectManager.getInstance().projectDirPath
     Objects.requireNonNull(projectDir)
     val isJava =
       Pattern.compile(Pattern.quote(projectDir) + JAVA_PATH_REGEX).matcher(file.absolutePath).find()
@@ -152,69 +161,92 @@ class NewFileAction(context: Context) :
     builder.setTitle(R.string.new_java_class)
     builder.setPositiveButton(R.string.text_create) { dialogInterface, _ ->
       dialogInterface.dismiss()
-      if (binding.name.isErrorEnabled) {
-        flashError(R.string.msg_invalid_name)
-        return@setPositiveButton
-      }
-
-      val name: String = binding.name.editText!!.text.toString().trim()
-      val autoLayout =
-        binding.typeGroup.checkedButtonId == binding.typeActivity.id &&
-          binding.createLayout.isChecked
-      val pkgName = ProjectWriter.getPackageName(file)
-      if (pkgName == null || pkgName.trim { it <= ' ' }.isEmpty()) {
-        flashError(R.string.msg_get_package_failed)
-        return@setPositiveButton
-      }
-
-      val id: Int = binding.typeGroup.checkedButtonId
-      val javaName = if (name.endsWith(".java")) name else "$name.java"
-      val className = if (!name.contains(".")) name else name.substring(0, name.lastIndexOf("."))
-      val created =
-        when (id) {
-          binding.typeClass.id ->
-            createFile(
-              context,
-              node,
-              file,
-              javaName,
-              ProjectWriter.createJavaClass(pkgName, className)
-            )
-          binding.typeInterface.id ->
-            createFile(
-              context,
-              node,
-              file,
-              javaName,
-              ProjectWriter.createJavaInterface(pkgName, className)
-            )
-          binding.typeEnum.id ->
-            createFile(
-              context,
-              node,
-              file,
-              javaName,
-              ProjectWriter.createJavaEnum(pkgName, className)
-            )
-          binding.typeActivity.id ->
-            createFile(
-              context,
-              node,
-              file,
-              javaName,
-              ProjectWriter.createActivity(pkgName, className)
-            )
-          else -> createFile(context, node, file, name, "")
-        }
-
-      if (created && autoLayout) {
-        val packagePath = pkgName.toString().replace(".", "/")
-        createAutoLayout(context, file, name, packagePath)
+      try {
+        doCreateJavaFile(binding, file, context, node)
+      } catch (e: Exception) {
+        log.error("Failed to create Java file", e)
+        flashError(e.cause?.message ?: e.message)
       }
     }
     builder.setNegativeButton(android.R.string.cancel, null)
     builder.setCancelable(false)
     builder.create().show()
+  }
+
+  private fun doCreateJavaFile(
+    binding: LayoutCreateFileJavaBinding,
+    file: File,
+    context: Context,
+    node: TreeNode?
+  ) {
+    if (binding.name.isErrorEnabled) {
+      flashError(R.string.msg_invalid_name)
+      return
+    }
+
+    val name: String = binding.name.editText!!.text.toString().trim()
+    if (name.isBlank()) {
+      flashError(R.string.msg_invalid_name)
+      return
+    }
+
+    val autoLayout =
+      binding.typeGroup.checkedButtonId == binding.typeActivity.id &&
+          binding.createLayout.isChecked
+    val pkgName = ProjectWriter.getPackageName(file)
+    if (pkgName == null || pkgName.trim { it <= ' ' }.isEmpty()) {
+      flashError(R.string.msg_get_package_failed)
+      return
+    }
+
+    val id: Int = binding.typeGroup.checkedButtonId
+    val javaName = if (name.endsWith(".java")) name else "$name.java"
+    val className = if (!name.contains(".")) name else name.substring(0, name.lastIndexOf("."))
+    val created =
+      when (id) {
+        binding.typeClass.id ->
+          createFile(
+            context,
+            node,
+            file,
+            javaName,
+            ProjectWriter.createJavaClass(pkgName, className)
+          )
+
+        binding.typeInterface.id ->
+          createFile(
+            context,
+            node,
+            file,
+            javaName,
+            ProjectWriter.createJavaInterface(pkgName, className)
+          )
+
+        binding.typeEnum.id ->
+          createFile(
+            context,
+            node,
+            file,
+            javaName,
+            ProjectWriter.createJavaEnum(pkgName, className)
+          )
+
+        binding.typeActivity.id ->
+          createFile(
+            context,
+            node,
+            file,
+            javaName,
+            ProjectWriter.createActivity(pkgName, className)
+          )
+
+        else -> createFile(context, node, file, name, "")
+      }
+
+    if (created && autoLayout) {
+      val packagePath = pkgName.toString().replace(".", "/")
+      createAutoLayout(context, file, name, packagePath)
+    }
   }
 
   private fun isValidJavaName(s: CharSequence?) =
@@ -319,18 +351,29 @@ class NewFileAction(context: Context) :
     builder.setTitle(R.string.new_file)
     builder.setMessage(
       context.getString(R.string.msg_can_contain_slashes) +
-        "\n\n" +
-        context.getString(R.string.msg_newfile_dest, folder.absolutePath)
+          "\n\n" +
+          context.getString(R.string.msg_newfile_dest, folder.absolutePath)
     )
     builder.setView(binding.root)
     builder.setCancelable(false)
     builder.setPositiveButton(R.string.text_create) { dialogInterface, _ ->
       dialogInterface.dismiss()
       var name = binding.name.editText!!.text.toString().trim()
+      if (name.isBlank()) {
+        flashError(R.string.msg_invalid_name)
+        return@setPositiveButton
+      }
+
       if (extension != null && extension.trim { it <= ' ' }.isNotEmpty()) {
         name = if (name.endsWith(extension)) name else name + extension
       }
-      createFile(context, node, folder, name, content)
+
+      try {
+        createFile(context, node, folder, name, content)
+      } catch (e: Exception) {
+        log.error("Failed to create file", e)
+        flashError(e.cause?.message ?: e.message)
+      }
     }
     builder.setNegativeButton(android.R.string.cancel, null)
     builder.create().show()

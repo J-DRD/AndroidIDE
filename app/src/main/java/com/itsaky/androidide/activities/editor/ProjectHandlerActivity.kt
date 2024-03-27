@@ -19,39 +19,55 @@ package com.itsaky.androidide.activities.editor
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.Gravity
 import android.view.ViewGroup.MarginLayoutParams
 import android.widget.CheckBox
+import androidx.activity.viewModels
 import androidx.annotation.GravityInt
 import androidx.appcompat.app.AlertDialog
 import com.blankj.utilcode.util.SizeUtils
 import com.blankj.utilcode.util.ThreadUtils
+import com.itsaky.androidide.R
 import com.itsaky.androidide.R.string
 import com.itsaky.androidide.databinding.LayoutSearchProjectBinding
+import com.itsaky.androidide.flashbar.Flashbar
 import com.itsaky.androidide.fragments.sheets.ProgressSheet
 import com.itsaky.androidide.handlers.EditorBuildEventListener
 import com.itsaky.androidide.handlers.LspHandler.connectClient
 import com.itsaky.androidide.handlers.LspHandler.destroyLanguageServers
-import com.itsaky.androidide.interfaces.IProjectHandler
 import com.itsaky.androidide.lookup.Lookup
 import com.itsaky.androidide.lsp.IDELanguageClientImpl
+import com.itsaky.androidide.lsp.java.utils.CancelChecker
 import com.itsaky.androidide.preferences.internal.NO_OPENED_PROJECT
 import com.itsaky.androidide.preferences.internal.lastOpenedProject
-import com.itsaky.androidide.projects.ProjectManager
-import com.itsaky.androidide.projects.ProjectManager.cachedInitResult
-import com.itsaky.androidide.projects.ProjectManager.getProjectDirPath
-import com.itsaky.androidide.projects.ProjectManager.notifyProjectUpdate
-import com.itsaky.androidide.projects.ProjectManager.projectInitialized
-import com.itsaky.androidide.projects.ProjectManager.projectPath
-import com.itsaky.androidide.projects.ProjectManager.rootProject
-import com.itsaky.androidide.projects.ProjectManager.setupProject
-import com.itsaky.androidide.projects.api.Project
+import com.itsaky.androidide.projects.ProjectManagerImpl
+import com.itsaky.androidide.projects.api.GradleProject
 import com.itsaky.androidide.projects.builder.BuildService
 import com.itsaky.androidide.services.builder.GradleBuildService
 import com.itsaky.androidide.services.builder.GradleBuildServiceConnnection
+import com.itsaky.androidide.services.builder.gradleDistributionParams
+import com.itsaky.androidide.tasks.executeAsyncProvideError
+import com.itsaky.androidide.tasks.executeWithProgress
+import com.itsaky.androidide.tooling.api.messages.AndroidInitializationParams
+import com.itsaky.androidide.tooling.api.messages.InitializeProjectParams
 import com.itsaky.androidide.tooling.api.messages.result.InitializeResult
+import com.itsaky.androidide.tooling.api.messages.result.TaskExecutionResult
+import com.itsaky.androidide.tooling.api.messages.result.TaskExecutionResult.Failure.PROJECT_DIRECTORY_INACCESSIBLE
+import com.itsaky.androidide.tooling.api.messages.result.TaskExecutionResult.Failure.PROJECT_NOT_DIRECTORY
+import com.itsaky.androidide.tooling.api.messages.result.TaskExecutionResult.Failure.PROJECT_NOT_FOUND
+import com.itsaky.androidide.tooling.api.models.BuildVariantInfo
+import com.itsaky.androidide.tooling.api.models.mapToSelectedVariants
+import com.itsaky.androidide.utils.DURATION_INDEFINITE
 import com.itsaky.androidide.utils.DialogUtils.newMaterialDialogBuilder
 import com.itsaky.androidide.utils.RecursiveFileSearcher
 import com.itsaky.androidide.utils.flashError
+import com.itsaky.androidide.utils.flashbarBuilder
+import com.itsaky.androidide.utils.resolveAttr
+import com.itsaky.androidide.utils.showOnUiThread
+import com.itsaky.androidide.utils.withIcon
+import com.itsaky.androidide.viewmodel.BuildVariantsViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.regex.Pattern
@@ -59,10 +75,13 @@ import java.util.stream.Collectors
 
 /** @author Akash Yadav */
 @Suppress("MemberVisibilityCanBePrivate")
-abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
+abstract class ProjectHandlerActivity : BaseEditorActivity() {
+
+  protected val buildVariantsViewModel by viewModels<BuildVariantsViewModel>()
 
   protected var mSearchingProgress: ProgressSheet? = null
   protected var mFindInProjectDialog: AlertDialog? = null
+  protected var syncNotificationFlashbar: Flashbar? = null
 
   protected var isFromSavedInstance = false
   protected var shouldInitialize = false
@@ -79,13 +98,17 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
 
   protected val mBuildEventListener = EditorBuildEventListener()
 
+  private val buildServiceConnection = GradleBuildServiceConnnection()
+
   companion object {
+
     const val STATE_KEY_FROM_SAVED_INSTANACE = "ide.editor.isFromSavedInstance"
     const val STATE_KEY_SHOULD_INITIALIZE = "ide.editor.isInitializing"
-    @JvmStatic private val buildServiceConnection = GradleBuildServiceConnnection()
   }
 
   abstract fun doCloseAll(runAfter: () -> Unit)
+
+  abstract fun saveOpenedFiles()
 
   override fun doDismissSearchProgress() {
     if (mSearchingProgress?.isShowing == true) {
@@ -109,13 +132,28 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
         this.isFromSavedInstance = false
       }
 
+    editorViewModel._isSyncNeeded.observe(this) { isSyncNeeded ->
+      if (!isSyncNeeded) {
+        // dismiss if already showing
+        syncNotificationFlashbar?.dismiss()
+        return@observe
+      }
+
+      if (syncNotificationFlashbar?.isShowing() == true) {
+        // already shown
+        return@observe
+      }
+
+      notifySyncNeeded()
+    }
+
     startServices()
   }
 
   override fun onSaveInstanceState(outState: Bundle) {
     super.onSaveInstanceState(outState)
     outState.apply {
-      putBoolean(STATE_KEY_SHOULD_INITIALIZE, !viewModel.isInitializing)
+      putBoolean(STATE_KEY_SHOULD_INITIALIZE, !editorViewModel.isInitializing)
       putBoolean(STATE_KEY_FROM_SAVED_INSTANACE, true)
     }
   }
@@ -126,14 +164,18 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
       // reset these values here
       // sometimes, when the IDE closed and reopened instantly, these values prevent initialization
       // of the project
-      ProjectManager.destroy()
+      ProjectManagerImpl.getInstance().destroy()
 
-      viewModel.isInitializing = false
-      viewModel.isBuildInProgress = false
+      editorViewModel.isInitializing = false
+      editorViewModel.isBuildInProgress = false
     }
   }
 
   override fun preDestroy() {
+
+    syncNotificationFlashbar?.dismiss()
+    syncNotificationFlashbar = null
+
     if (isDestroying) {
       releaseServerListener()
       this.initializingFuture?.cancel(true)
@@ -142,13 +184,13 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
       closeProject(false)
     }
 
+    if (IDELanguageClientImpl.isInitialized()) {
+      IDELanguageClientImpl.shutdown()
+    }
+
     super.preDestroy()
 
     if (isDestroying) {
-
-      if (IDELanguageClientImpl.isInitialized()) {
-        IDELanguageClientImpl.shutdown()
-      }
 
       try {
         stopLanguageServers()
@@ -162,29 +204,65 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
       } catch (err: Throwable) {
         log.error("Unable to unbind service")
       } finally {
-        (Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE) as? GradleBuildService?)
-          ?.setEventListener(null)
-        Lookup.getDefault().unregister(BuildService.KEY_BUILD_SERVICE)
-        viewModel.isBoundToBuildSerice = false
+        Lookup.getDefault().apply {
+
+          (lookup(BuildService.KEY_BUILD_SERVICE) as? GradleBuildService?)
+            ?.setEventListener(null)
+
+          unregister(BuildService.KEY_BUILD_SERVICE)
+        }
+
+        mBuildEventListener.release()
+        editorViewModel.isBoundToBuildSerice = false
       }
     }
   }
 
-  override fun setStatus(status: CharSequence, @GravityInt gravity: Int) {
+  fun setStatus(status: CharSequence) {
+    setStatus(status, Gravity.CENTER)
+  }
+
+  fun setStatus(status: CharSequence, @GravityInt gravity: Int) {
     doSetStatus(status, gravity)
   }
 
-  override fun appendBuildOutput(str: String) {
+  fun appendBuildOutput(str: String) {
     binding.bottomSheet.appendBuildOut(str)
   }
 
-  override fun notifySyncNeeded() {
+  fun notifySyncNeeded() {
     notifySyncNeeded { initializeProject() }
   }
 
-  override fun startServices() {
+  private fun notifySyncNeeded(onConfirm: () -> Unit) {
+    val buildService = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE)
+    if (buildService == null || editorViewModel.isInitializing || buildService.isBuildInProgress) return
+
+    this.syncNotificationFlashbar?.dismiss()
+
+    this.syncNotificationFlashbar = flashbarBuilder(
+      duration = DURATION_INDEFINITE,
+      backgroundColor = resolveAttr(R.attr.colorSecondaryContainer),
+      messageColor = resolveAttr(R.attr.colorOnSecondaryContainer)
+    )
+      .withIcon(R.drawable.ic_sync, colorFilter = resolveAttr(R.attr.colorOnSecondaryContainer))
+      .message(string.msg_sync_needed)
+      .positiveActionText(string.btn_sync)
+      .positiveActionTapListener {
+        onConfirm()
+        it.dismiss()
+      }
+      .negativeActionText(string.btn_ignore_changes)
+      .negativeActionTapListener(Flashbar::dismiss)
+      .build()
+
+    this.syncNotificationFlashbar?.showOnUiThread()
+
+  }
+
+  fun startServices() {
     val service = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE) as GradleBuildService?
-    if (viewModel.isBoundToBuildSerice && service != null) {
+    if (editorViewModel.isBoundToBuildSerice && service != null) {
       log.info("Reusing already started Gradle build service")
       onGradleBuildServiceConnected(service)
       return
@@ -209,15 +287,83 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
     initLspClient()
   }
 
-  override fun initializeProject() {
-    val projectDir = File(projectPath)
-    if (!projectDir.exists()) {
-      log.error("Project directory does not exist. Cannot initialize project")
+  /**
+   * Initialize (sync) the project.
+   *
+   * @param buildVariantsProvider A function which returns the map of project paths to the selected build variants.
+   *    This function is called asynchronously.
+   */
+  fun initializeProject(buildVariantsProvider: () -> Map<String, String>) {
+    executeWithProgress { progress ->
+      executeAsyncProvideError(buildVariantsProvider::invoke) { result, error ->
+        com.itsaky.androidide.tasks.runOnUiThread {
+          progress.dismiss()
+        }
+
+        if (result == null || error != null) {
+          val msg = getString(string.msg_build_variants_fetch_failed)
+          flashError(msg)
+          log.error(msg, error)
+          return@executeAsyncProvideError
+        }
+
+        com.itsaky.androidide.tasks.runOnUiThread {
+          initializeProject(result)
+        }
+      }
+    }
+  }
+
+  fun initializeProject() {
+    val currentVariants = buildVariantsViewModel._buildVariants.value
+
+    // no information about the build variants is available
+    // use the default variant selections
+    if (currentVariants == null) {
+      log.debug(
+        "No variant selection information available. Default build variants will be selected.")
+      initializeProject(emptyMap())
       return
     }
 
-    val initialized = projectInitialized && cachedInitResult != null
-    log.debug("Is project initialized: $initialized")
+    // variant selection information is available
+    // but there are updated & unsaved variant selections
+    // use the updated variant selections to initialize the project
+    if (buildVariantsViewModel.updatedBuildVariants.isNotEmpty()) {
+      val newSelections = currentVariants.toMutableMap()
+      newSelections.putAll(buildVariantsViewModel.updatedBuildVariants)
+      initializeProject {
+        newSelections.mapToSelectedVariants().also {
+          log.debug("Initializing project with new build variant selections: {}", it)
+        }
+      }
+      return
+    }
+
+    // variant selection information is available but no variant selections have been updated
+    // the user might be trying to sync the project from options menu
+    // initialize the project with the existing selected variants
+    initializeProject {
+      log.debug("Re-initializing project with existing build variant selections")
+      currentVariants.mapToSelectedVariants()
+    }
+  }
+
+  /**
+   * Initialize (sync) the project.
+   *
+   * @param buildVariants A map of project paths to the selected build variants.
+   */
+  fun initializeProject(buildVariants: Map<String, String>) {
+    val manager = ProjectManagerImpl.getInstance()
+    val projectDir = File(manager.projectPath)
+    if (!projectDir.exists()) {
+      log.error("GradleProject directory does not exist. Cannot initialize project")
+      return
+    }
+
+    val initialized = manager.projectInitialized && manager.cachedInitResult != null
+    log.debug("Is project initialized: {}", initialized)
     // When returning after a configuration change between the initialization process,
     // we do not want to start another project initialization
     if (isFromSavedInstance && initialized && !shouldInitialize) {
@@ -242,28 +388,52 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
     this.initializingFuture =
       if (shouldInitialize || (!isFromSavedInstance && !initialized)) {
         log.debug("Sending init request to tooling server..")
-        buildService.initializeProject(projectDir.absolutePath)
+        buildService.initializeProject(createProjectInitParams(projectDir, buildVariants))
       } else {
         // The project initialization was in progress before the configuration change
         // In this case, we should not start another project initialization
         log.debug("Using cached initialize result as the project is already initialized")
         CompletableFuture.supplyAsync {
-          log.warn("Project has already been initialized. Skipping initialization process.")
-          cachedInitResult
+          log.warn("GradleProject has already been initialized. Skipping initialization process.")
+          manager.cachedInitResult
         }
       }
 
     this.initializingFuture!!.whenCompleteAsync { result, error ->
       releaseServerListener()
 
-      if (result == null || error != null) {
-        log.error("An error occurred initializing the project with Tooling API", error)
-        setStatus(getString(string.msg_project_initialization_failed))
+      if (result == null || !result.isSuccessful || error != null) {
+        if (!CancelChecker.isCancelled(error)) {
+          log.error("An error occurred initializing the project with Tooling API", error)
+        }
+
+        ThreadUtils.runOnUiThread {
+          postProjectInit(false, result?.failure)
+        }
         return@whenCompleteAsync
       }
 
       onProjectInitialized(result)
     }
+  }
+
+  private fun createProjectInitParams(
+    projectDir: File,
+    buildVariants: Map<String, String>
+  ): InitializeProjectParams {
+    return InitializeProjectParams(
+      projectDir.absolutePath,
+      gradleDistributionParams,
+      createAndroidParams(buildVariants)
+    )
+  }
+
+  private fun createAndroidParams(buildVariants: Map<String, String>): AndroidInitializationParams {
+    if (buildVariants.isEmpty()) {
+      return AndroidInitializationParams.DEFAULT
+    }
+
+    return AndroidInitializationParams(buildVariants)
   }
 
   private fun releaseServerListener() {
@@ -272,7 +442,7 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
       ?.setServerListener(null)
   }
 
-  override fun stopLanguageServers() {
+  fun stopLanguageServers() {
     try {
       destroyLanguageServers(isChangingConfigurations)
     } catch (err: Throwable) {
@@ -284,7 +454,7 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
     log.info("Connected to Gradle build service")
 
     buildServiceConnection.onConnected = null
-    viewModel.isBoundToBuildSerice = true
+    editorViewModel.isBoundToBuildSerice = true
     Lookup.getDefault().update(BuildService.KEY_BUILD_SERVICE, service)
     service.setEventListener(mBuildEventListener)
 
@@ -296,27 +466,55 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
   }
 
   protected open fun onProjectInitialized(result: InitializeResult) {
-    if (isFromSavedInstance && projectInitialized && result == cachedInitResult) {
+    val manager = ProjectManagerImpl.getInstance()
+    if (isFromSavedInstance && manager.projectInitialized && result == manager.cachedInitResult) {
       log.debug("Not setting up project as this a configuration change")
       return
     }
 
-    cachedInitResult = result
-    setupProject()
-    notifyProjectUpdate()
-    ThreadUtils.runOnUiThread { postProjectInit() }
+    manager.cachedInitResult = result
+    editorActivityScope.launch(Dispatchers.IO) {
+      manager.setupProject()
+      manager.notifyProjectUpdate()
+      updateBuildVariants(manager.androidBuildVariants)
+
+      com.itsaky.androidide.tasks.runOnUiThread {
+        postProjectInit(true, null)
+      }
+    }
   }
 
   protected open fun preProjectInit() {
     setStatus(getString(string.msg_initializing_project))
-    viewModel.isInitializing = true
+    editorViewModel.isInitializing = true
   }
 
-  protected open fun postProjectInit() {
+  protected open fun postProjectInit(isSuccessful: Boolean, failure: TaskExecutionResult.Failure?) {
+    val manager = ProjectManagerImpl.getInstance()
+    if (!isSuccessful) {
+      val initFailed = getString(string.msg_project_initialization_failed)
+      setStatus(initFailed)
+
+      val msg = when(failure) {
+        PROJECT_DIRECTORY_INACCESSIBLE -> string.msg_project_dir_inaccessible
+        PROJECT_NOT_DIRECTORY -> string.msg_file_is_not_dir
+        PROJECT_NOT_FOUND -> string.msg_project_dir_doesnt_exist
+        else -> null
+      }?.let {
+        "$initFailed: ${getString(it)}"
+      }
+
+      flashError(msg ?: initFailed)
+
+      editorViewModel.isInitializing = false
+      manager.projectInitialized = false
+      return
+    }
+
     initialSetup()
     setStatus(getString(string.msg_project_initialized))
-    viewModel.isInitializing = false
-    projectInitialized = true
+    editorViewModel.isInitializing = false
+    manager.projectInitialized = true
 
     if (mFindInProjectDialog?.isShowing == true) {
       mFindInProjectDialog!!.dismiss()
@@ -325,8 +523,17 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
     mFindInProjectDialog = null // Create the dialog again if needed
   }
 
+  private fun updateBuildVariants(buildVariants: Map<String, BuildVariantInfo>) {
+    // avoid using the 'runOnUiThread' method defined in the activity
+    com.itsaky.androidide.tasks.runOnUiThread {
+      buildVariantsViewModel.buildVariants = buildVariants
+      buildVariantsViewModel.resetUpdatedSelections()
+    }
+  }
+
   protected open fun createFindInProjectDialog(): AlertDialog? {
-    if (rootProject == null) {
+    val manager = ProjectManagerImpl.getInstance()
+    if (manager.rootProject == null) {
       log.warn("No root project model found. Is the project initialized?")
       flashError(getString(string.msg_project_not_initialized))
       return null
@@ -334,7 +541,8 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
 
     val moduleDirs =
       try {
-        rootProject!!.subModules.stream().map(Project::projectDir).collect(Collectors.toList())
+        manager.rootProject!!.subProjects.stream().map(GradleProject::projectDir)
+          .collect(Collectors.toList())
       } catch (e: Throwable) {
         flashError(getString(string.msg_no_modules))
         emptyList()
@@ -390,10 +598,10 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
       if (extensions.isNotEmpty()) {
         if (extensions.contains("|")) {
           for (str in
-            extensions
-              .split(Pattern.quote("|").toRegex())
-              .dropLastWhile { it.isEmpty() }
-              .toTypedArray()) {
+          extensions
+            .split(Pattern.quote("|").toRegex())
+            .dropLastWhile { it.isEmpty() }
+            .toTypedArray()) {
             if (str.trim().isEmpty()) {
               continue
             }
@@ -425,17 +633,18 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
   }
 
   private fun initialSetup() {
-    lastOpenedProject = getProjectDirPath()
+    val manager = ProjectManagerImpl.getInstance()
+    lastOpenedProject = manager.projectDirPath
     try {
-      val rootProject = rootProject
-      if (rootProject == null) {
-        log.warn("Project not initialized. Skipping initial setup...")
+      val project = manager.rootProject
+      if (project == null) {
+        log.warn("GradleProject not initialized. Skipping initial setup...")
         return
       }
 
-      var projectName = rootProject.name
+      var projectName = project.rootProject.name
       if (projectName.isEmpty()) {
-        projectName = File(getProjectDirPath()).name
+        projectName = manager.projectDir.name
       }
 
       supportActionBar!!.subtitle = projectName
@@ -445,11 +654,20 @@ abstract class ProjectHandlerActivity : BaseEditorActivity(), IProjectHandler {
   }
 
   private fun closeProject(manualFinish: Boolean) {
+    if (manualFinish) {
+      // if the user is manually closing the project,
+      // save the opened files cache
+      // this is needed because in this case, the opened files cache will be empty
+      // when onPause will be called.
+      saveOpenedFiles()
+
+      // reset the lastOpenedProject if the user explicitly chose to close the project
+      lastOpenedProject = NO_OPENED_PROJECT
+    }
 
     // Make sure we close files
     // This will make sure that file contents are not erased.
     doCloseAll {
-      lastOpenedProject = NO_OPENED_PROJECT
       if (manualFinish) {
         finish()
       }

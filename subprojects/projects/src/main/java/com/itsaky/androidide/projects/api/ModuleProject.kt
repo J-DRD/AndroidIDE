@@ -18,18 +18,19 @@
 package com.itsaky.androidide.projects.api
 
 import android.text.TextUtils
+import androidx.annotation.RestrictTo
 import com.itsaky.androidide.builder.model.IJavaCompilerSettings
 import com.itsaky.androidide.javac.services.fs.CacheFSInfoSingleton
 import com.itsaky.androidide.lookup.Lookup
 import com.itsaky.androidide.projects.classpath.JarFsClasspathReader
 import com.itsaky.androidide.projects.util.BootClasspathProvider
-import com.itsaky.androidide.tooling.api.model.GradleTask
+import com.itsaky.androidide.tooling.api.models.GradleTask
 import com.itsaky.androidide.utils.ClassTrie
 import com.itsaky.androidide.utils.DocumentUtils
-import com.itsaky.androidide.utils.ILogger
 import com.itsaky.androidide.utils.SourceClassTrie
 import com.itsaky.androidide.utils.SourceClassTrie.SourceNode
 import com.itsaky.androidide.utils.StopWatch
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.file.Path
 import kotlin.io.path.pathString
@@ -46,20 +47,25 @@ abstract class ModuleProject(
   projectDir: File,
   buildDir: File,
   buildScript: File,
-  tasks: List<GradleTask>,
-  override val compilerSettings: IJavaCompilerSettings
+  tasks: List<GradleTask>
 ) :
-  Project(name, description, path, projectDir, buildDir, buildScript, tasks),
-  com.itsaky.androidide.tooling.api.model.ModuleProject {
+  GradleProject(name, description, path, projectDir, buildDir, buildScript, tasks) {
 
-  private val log = ILogger.newInstance(javaClass.simpleName)
+  abstract val compilerSettings: IJavaCompilerSettings
 
   companion object {
-    @JvmStatic val COMPLETION_MODULE_KEY = Lookup.Key<ModuleProject>()
+
+    private val log = LoggerFactory.getLogger(ModuleProject::class.java)
+
+    @JvmStatic
+    val COMPLETION_MODULE_KEY = Lookup.Key<ModuleProject>()
   }
 
-  @JvmField val compileJavaSourceClasses = SourceClassTrie()
-  @JvmField val compileClasspathClasses = ClassTrie()
+  @JvmField
+  val compileJavaSourceClasses = SourceClassTrie()
+
+  @JvmField
+  val compileClasspathClasses = ClassTrie()
 
   /**
    * Get the source directories of this module (non-transitive i.e for this module only).
@@ -75,6 +81,12 @@ abstract class ModuleProject(
    * @return The source directories.
    */
   abstract fun getCompileSourceDirectories(): Set<File>
+
+  /**
+   * Get the classpaths for this module project. The returned list always included the
+   * `classes.jar`.
+   */
+  abstract fun getClassPaths(): Set<File>
 
   /**
    * Get the JAR files for this module. This does not include JAR files of any dependencies.
@@ -97,14 +109,26 @@ abstract class ModuleProject(
    */
   abstract fun getCompileModuleProjects(): List<ModuleProject>
 
+  /**
+   * Find the source root of the given [file].
+   *
+   * @param file The file to find the source root for.
+   * @return The source root (directory) of the given file, or `null` if not found.
+   */
+  fun findSourceRoot(file: File): Path? {
+    return getCompileSourceDirectories().find { file.path.startsWith(it.path) }?.toPath()
+  }
+
   /** Finds the source files and classes from source directories and classpaths and indexes them. */
-  internal fun indexSourcesAndClasspaths() {
-    log.info("Indexing sources and classpaths for project:", path)
+  @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP_PREFIX)
+  fun indexSourcesAndClasspaths() {
+    log.info("Indexing sources and classpaths for project: {}", path)
     indexSources()
     indexClasspaths()
   }
 
-  internal fun indexClasspaths() {
+  @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP_PREFIX)
+  fun indexClasspaths() {
 
     this.compileClasspathClasses.clear()
 
@@ -121,14 +145,15 @@ abstract class ModuleProject(
     topLevelClasses.forEach { this.compileClasspathClasses.append(it.name) }
 
     watch.log()
-    log.debug("Found ${topLevelClasses.size} classpaths.")
+    log.debug("Found {} classpaths.", topLevelClasses.size)
 
     if (this is AndroidModule) {
       BootClasspathProvider.update(bootClassPaths.map { it.path })
     }
   }
 
-  internal fun indexSources() {
+  @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP_PREFIX)
+  fun indexSources() {
 
     this.compileJavaSourceClasses.clear()
 
@@ -147,7 +172,7 @@ abstract class ModuleProject(
     }
 
     watch.log()
-    log.debug("Found $count source files.")
+    log.debug("Found {} source files.", count)
   }
 
   fun getSourceFilesInDir(dir: Path): List<SourceNode> =

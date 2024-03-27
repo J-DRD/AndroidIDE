@@ -32,6 +32,7 @@ import com.itsaky.androidide.templates.impl.composeActivity.composeActivityProje
 import com.itsaky.androidide.templates.impl.emptyActivity.emptyActivityProject
 import com.itsaky.androidide.templates.impl.navDrawerActivity.navDrawerActivityProject
 import com.itsaky.androidide.templates.impl.noActivity.noActivityProjectTemplate
+import com.itsaky.androidide.templates.impl.noAndroidXActivity.noAndroidXActivityProject
 import com.itsaky.androidide.templates.impl.tabbedActivity.tabbedActivityProject
 import com.itsaky.androidide.xml.permissions.Permission.INTERNET
 import com.squareup.javapoet.ArrayTypeName
@@ -70,7 +71,7 @@ class TemplateBuilderTest {
 
       parameters.apply {
         assertThat(this).isNotEmpty()
-        assertThat(this).hasSize(5)
+        assertThat(this).hasSize(6)
         assertParameterTypes {
           when (it) {
             0 -> StringParameter::class
@@ -78,6 +79,7 @@ class TemplateBuilderTest {
             2 -> StringParameter::class
             3 -> EnumParameter::class
             4 -> EnumParameter::class
+            5 -> BooleanParameter::class
             else -> throw IndexOutOfBoundsException("index $it")
           }
         }
@@ -85,7 +87,7 @@ class TemplateBuilderTest {
 
       widgets.apply {
         assertThat(this).isNotEmpty()
-        assertThat(this).hasSize(5)
+        assertThat(this).hasSize(6)
         assertWidgetTypes {
           when (it) {
             0 -> TextFieldWidget::class
@@ -93,6 +95,7 @@ class TemplateBuilderTest {
             2 -> TextFieldWidget::class
             3 -> SpinnerWidget::class
             4 -> SpinnerWidget::class
+            5 -> CheckBoxWidget::class
             else -> throw IndexOutOfBoundsException("index $it")
           }
         }
@@ -181,6 +184,13 @@ class TemplateBuilderTest {
   fun `test no activity project`() {
     testTemplate("NoActivity") {
       noActivityProjectTemplate()
+    }
+  }
+
+  @Test
+  fun `test no AndroidX activity template`() {
+    testTemplate("NoAndroidXActivity") {
+      noAndroidXActivityProject()
     }
   }
 

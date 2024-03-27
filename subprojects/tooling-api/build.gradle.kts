@@ -22,14 +22,13 @@ plugins {
 }
 
 dependencies {
+    api(projects.buildInfo)
     api(projects.logger)
+    api(projects.shared)
     api(projects.subprojects.toolingApiModel)
     api(projects.subprojects.toolingApiEvents)
     
     api(libs.google.gson)
     api(libs.common.jsonrpc)
     implementation(libs.common.jkotlin)
-    
-    testImplementation(libs.tests.junit)
-    testImplementation(libs.tests.google.truth)
 }

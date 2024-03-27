@@ -15,20 +15,6 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/**
- * This file is part of AndroidIDE.
- *
- * AndroidIDE is free software: you can redistribute it and/or modify it under the terms of the GNU
- * General Public License as published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * AndroidIDE is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with AndroidIDE. If not,
- * see <https:></https:>//www.gnu.org/licenses/>.
- */
 package com.itsaky.androidide.fragments
 
 import android.content.Intent
@@ -42,6 +28,10 @@ import androidx.fragment.app.Fragment
 import com.itsaky.androidide.common.R
 import com.itsaky.androidide.resources.R.string
 import com.itsaky.androidide.utils.flashError
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import java.io.File
 
 open class BaseFragment @JvmOverloads constructor(contentLayoutId: Int = 0) :
@@ -51,9 +41,16 @@ open class BaseFragment @JvmOverloads constructor(contentLayoutId: Int = 0) :
   private val allowedAuthorities =
     setOf(ANDROID_DOCS_AUTHORITY, ANDROIDIDE_DOCS_AUTHORITY)
 
+  protected val viewLifecycleScope = CoroutineScope(Dispatchers.Default + CoroutineName(javaClass.simpleName))
+
   companion object {
     const val ANDROID_DOCS_AUTHORITY = "com.android.externalstorage.documents"
     const val ANDROIDIDE_DOCS_AUTHORITY = "com.itsaky.androidide.documents"
+  }
+
+  override fun onDestroyView() {
+    super.onDestroyView()
+    viewLifecycleScope.cancel("${javaClass.simpleName} is being destroyed")
   }
 
   private val startForResult =

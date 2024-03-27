@@ -23,21 +23,20 @@ import androidx.collection.LongSparseArray;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
-
-import com.itsaky.androidide.resources.R;
-import com.itsaky.androidide.fragments.AppLogFragment;
 import com.itsaky.androidide.fragments.DiagnosticsListFragment;
-import com.itsaky.androidide.fragments.IDELogFragment;
 import com.itsaky.androidide.fragments.SearchResultFragment;
-import com.itsaky.androidide.fragments.SimpleOutputFragment;
-import com.itsaky.androidide.utils.ILogger;
-
+import com.itsaky.androidide.fragments.output.AppLogFragment;
+import com.itsaky.androidide.fragments.output.BuildOutputFragment;
+import com.itsaky.androidide.fragments.output.IDELogFragment;
+import com.itsaky.androidide.resources.R;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
 
-  private static final ILogger LOG = ILogger.newInstance("EditorBottomSheetTabAdapter");
+  private static final Logger LOG = LoggerFactory.getLogger(EditorBottomSheetTabAdapter.class);
   private final List<Tab> fragments;
 
   public EditorBottomSheetTabAdapter(@NonNull FragmentActivity fragmentActivity) {
@@ -48,7 +47,7 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
     this.fragments.add(
         new Tab(
             fragmentActivity.getString(R.string.build_output),
-            SimpleOutputFragment.class,
+            BuildOutputFragment.class,
             ++index));
     this.fragments.add(
         new Tab(fragmentActivity.getString(R.string.app_logs), AppLogFragment.class, ++index));
@@ -117,8 +116,8 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
   }
 
   @Nullable
-  public SimpleOutputFragment getBuildOutputFragment() {
-    return findFragmentByClass(SimpleOutputFragment.class);
+  public BuildOutputFragment getBuildOutputFragment() {
+    return findFragmentByClass(BuildOutputFragment.class);
   }
 
   @Nullable

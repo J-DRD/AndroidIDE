@@ -22,7 +22,6 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModel
-import com.itsaky.androidide.templates.ProjectTemplate
 import com.itsaky.androidide.templates.Template
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -35,7 +34,13 @@ class MainViewModel : ViewModel() {
 
   companion object {
 
-    // main screens
+    // The values assigned to these variables reflect the order in which the screens are presented
+    // to the user. A screen with a lower value is displayed before a screen with a higher value.
+    // For example, SCREEN_MAIN is the first screen visible to the user, followed by SCREEN_TEMPLATE_LIST,
+    // and then SCREEN_TEMPLATE_DETAILS.
+    //
+    // These values are used as unique identifiers for the screens as well as for determining whether
+    // the screen change transition should be forward or backward.
     const val SCREEN_MAIN = 0
     const val SCREEN_TEMPLATE_LIST = 1
     const val SCREEN_TEMPLATE_DETAILS = 2
@@ -49,6 +54,7 @@ class MainViewModel : ViewModel() {
   internal val creatingProject = MutableLiveData(false)
 
   val currentScreen: LiveData<Int> = _currentScreen
+
   val previousScreen: Int
     get() = _previousScreen.get()
 
@@ -66,11 +72,13 @@ class MainViewModel : ViewModel() {
   fun postTransition(owner: LifecycleOwner, action: Runnable) {
     if (isTransitionInProgress) {
       _isTransitionInProgress.observe(owner, object : Observer<Boolean> {
-        override fun onChanged(t: Boolean?) {
+        override fun onChanged(t: Boolean) {
           _isTransitionInProgress.removeObserver(this)
           action.run()
         }
       })
-    } else action.run()
+    } else {
+      action.run()
+    }
   }
 }

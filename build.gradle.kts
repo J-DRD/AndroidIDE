@@ -17,123 +17,51 @@
 
 @file:Suppress("UnstableApiUsage")
 
-import com.android.build.gradle.BaseExtension
+import com.itsaky.androidide.build.config.BuildConfig
+import com.itsaky.androidide.build.config.FDroidConfig
+import com.itsaky.androidide.build.config.publishingVersion
 import com.itsaky.androidide.plugins.AndroidIDEPlugin
-import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
-import com.vanniktech.maven.publish.GradlePlugin
-import com.vanniktech.maven.publish.JavaLibrary
-import com.vanniktech.maven.publish.JavadocJar
-import com.vanniktech.maven.publish.MavenPublishBaseExtension
-import com.vanniktech.maven.publish.SonatypeHost.Companion.S01
-import org.gradle.api.Project
+import com.itsaky.androidide.plugins.conf.configureAndroidModule
+import com.itsaky.androidide.plugins.conf.configureJavaModule
+import com.itsaky.androidide.plugins.conf.configureMavenPublish
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-@Suppress("DSL_SCOPE_VIOLATION")
 plugins {
   id("build-logic.root-project")
   alias(libs.plugins.android.application) apply false
   alias(libs.plugins.android.library) apply false
-  alias(libs.plugins.kotlin) apply false
+  alias(libs.plugins.kotlin.android) apply false
+  alias(libs.plugins.kotlin.jvm) apply false
   alias(libs.plugins.maven.publish) apply false
   alias(libs.plugins.gradle.publish) apply false
 }
 
 buildscript {
   dependencies {
-    classpath("com.google.android.gms:oss-licenses-plugin:0.10.6")
-    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.21")
-    classpath("androidx.navigation:navigation-safe-args-gradle-plugin:2.5.3")
-  }
-}
-
-fun Project.configureBaseExtension() {
-  extensions.findByType(BaseExtension::class)?.run {
-    compileSdkVersion(BuildConfig.compileSdk)
-    buildToolsVersion = BuildConfig.buildTools
-
-    defaultConfig {
-      minSdk = BuildConfig.minSdk
-      targetSdk = BuildConfig.targetSdk
-      versionCode = projectVersionCode
-      versionName = rootProject.version.toString()
-    }
-
-    compileOptions {
-      sourceCompatibility = BuildConfig.javaVersion
-      targetCompatibility = BuildConfig.javaVersion
-    }
-
-    buildTypes.getByName("debug") { isMinifyEnabled = false }
-    buildTypes.getByName("release") {
-      isMinifyEnabled = true
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-    }
-
-    testOptions { unitTests.isIncludeAndroidResources = true }
-
-    buildFeatures.viewBinding = true
-    buildFeatures.buildConfig = true
+    classpath(libs.kotlin.gradle.plugin)
+    classpath(libs.nav.safe.args.gradle.plugin)
   }
 }
 
 subprojects {
-  apply { plugin(AndroidIDEPlugin::class.java) }
+  // Always load the F-Droid config
+  FDroidConfig.load(project)
+
+  afterEvaluate {
+    apply { plugin(AndroidIDEPlugin::class.java) }
+  }
 
   project.group = BuildConfig.packageName
   project.version = rootProject.version
-  plugins.withId("com.android.application") { configureBaseExtension() }
-  plugins.withId("com.android.library") { configureBaseExtension() }
 
-  plugins.withId("java-library") {
-    configure<JavaPluginExtension> {
-      sourceCompatibility = BuildConfig.javaVersion
-      targetCompatibility = BuildConfig.javaVersion
-    }
+  plugins.withId("com.android.application") {
+    configureAndroidModule(libs.androidx.libDesugaring)
   }
-
-  plugins.withId("com.vanniktech.maven.publish.base") {
-    configure<MavenPublishBaseExtension> {
-
-      pom {
-        name.set(project.name)
-        description.set(project.description)
-        inceptionYear.set("2021")
-        url.set(ProjectConfig.REPO_URL)
-        licenses {
-          license {
-            name.set("The GNU General Public License, v3.0")
-            url.set("https://www.gnu.org/licenses/gpl-3.0.en.html")
-            distribution.set("https://www.gnu.org/licenses/gpl-3.0.en.html")
-          }
-        }
-
-        developers {
-          developer {
-            id.set("androidide")
-            name.set("AndroidIDE")
-            url.set(ProjectConfig.PROJECT_SITE)
-          }
-        }
-
-        scm {
-          url.set(ProjectConfig.REPO_URL)
-          connection.set(ProjectConfig.SCM_GIT)
-          developerConnection.set(ProjectConfig.SCM_SSH)
-        }
-      }
-
-      coordinates(project.group.toString(), project.name, project.publishingVersion)
-      publishToMavenCentral(host = S01)
-      signAllPublications()
-
-      if (plugins.hasPlugin("com.android.library")) {
-        configure(AndroidSingleVariantLibrary())
-      } else if (plugins.hasPlugin("java-gradle-plugin")) {
-        configure(GradlePlugin(javadocJar = JavadocJar.Javadoc()))
-      } else if (plugins.hasPlugin("java-library")) {
-        configure(JavaLibrary(javadocJar = JavadocJar.Javadoc()))
-      }
-    }
+  plugins.withId("com.android.library") {
+    configureAndroidModule(libs.androidx.libDesugaring)
   }
+  plugins.withId("java-library") { configureJavaModule() }
+  plugins.withId("com.vanniktech.maven.publish.base") { configureMavenPublish() }
 
   plugins.withId("com.gradle.plugin-publish") {
     configure<GradlePluginDevelopmentExtension> {
@@ -141,9 +69,9 @@ subprojects {
     }
   }
 
-  tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+  tasks.withType<KotlinCompile>().configureEach {
     kotlinOptions.jvmTarget = BuildConfig.javaVersion.toString()
   }
 }
 
-tasks.register<Delete>("clean") { delete(rootProject.buildDir) }
+tasks.register<Delete>("clean") { delete(rootProject.layout.buildDirectory) }

@@ -22,25 +22,36 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams
 import com.itsaky.androidide.inflater.InflateException
-import com.itsaky.androidide.utils.ILogger
+import com.itsaky.androidide.inflater.internal.ViewAdapterIndexImpl
+import org.slf4j.LoggerFactory
 import java.lang.reflect.Method
 
 /** @author Akash Yadav */
 object ViewFactory {
-  private val log = ILogger.newInstance("ViewFactory")
+
+  private val log = LoggerFactory.getLogger(ViewFactory::class.java)
 
   fun createViewInstance(name: String, context: Context): View {
+    val adapter = ViewAdapterIndexImpl.INSTANCE.getViewAdapter(name)
     return try {
+      if (adapter != null) {
+        // Check if adapter can create the view instance
+        val view = adapter.onCreateView(name, context)
+        if (view != null) {
+          return view
+        }
+      }
+
       val klass = javaClass.classLoader!!.loadClass(name)
       val constructor = klass.getConstructor(Context::class.java)
       constructor.newInstance(context) as View
     } catch (err: Throwable) {
-      log.error(err)
+      log.error("Failed to create view instance for view: {}", name, err)
       throw RuntimeException(err)
     }
   }
-  
-  fun generateLayoutParams(parent: ViewGroup) : LayoutParams {
+
+  fun generateLayoutParams(parent: ViewGroup): LayoutParams {
     return try {
       var clazz: Class<in ViewGroup> = parent.javaClass
       var method: Method?
@@ -51,14 +62,14 @@ object ViewFactory {
         } catch (e: Throwable) {
           /* ignored */
         }
-      
+
         clazz = clazz.superclass
       }
       if (method != null) {
         method.isAccessible = true
         return method.invoke(parent) as LayoutParams
       }
-      log.error("Unable to create default params for view parent:", parent)
+      log.error("Unable to create default params for view parent: {}", parent)
       LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
     } catch (th: Throwable) {
       throw InflateException("Unable to create layout params for parent: $parent", th)

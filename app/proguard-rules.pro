@@ -35,7 +35,6 @@
 }
 
 # EventBus
--keepattributes *Annotation*
 -keepclassmembers class ** {
     @org.greenrobot.eventbus.Subscribe <methods>;
 }
@@ -86,4 +85,45 @@
 -keepclasseswithmembers class ** {
     native <methods>;
 }
+
 -keep class com.itsaky.androidide.treesitter.** { *; }
+
+# Retrofit 2
+-dontwarn retrofit2.**
+-keep class retrofit2.** { *; }
+
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
+
+# OkHttp3
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+-dontwarn okhttp3.**
+
+# Stat uploader
+-keep class com.itsaky.androidide.stats.** { *; }
+
+# Gson
+-keep class * extends com.google.gson.TypeAdapter
+-keep class * implements com.google.gson.TypeAdapterFactory
+-keep class * implements com.google.gson.JsonSerializer
+-keep class * implements com.google.gson.JsonDeserializer
+
+-keepclassmembers,allowobfuscation class * {
+  @com.google.gson.annotations.SerializedName <fields>;
+}
+
+## Retain generic signatures of TypeToken and its subclasses with R8 version 3.0 and higher.
+-keep,allowobfuscation,allowshrinking class com.google.gson.reflect.TypeToken
+-keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken
+
+## Themes
+-keep enum com.itsaky.androidide.ui.themes.IDETheme {
+  *;
+}
+
+## Contributor models - deserialized with GSON
+-keep class * implements com.itsaky.androidide.contributors.Contributor {
+  *;
+}

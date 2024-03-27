@@ -18,12 +18,12 @@
 package com.itsaky.androidide.actions.editor
 
 import android.content.Context
-import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.BaseEditorAction
+import com.itsaky.androidide.resources.R
 
 /** @author Akash Yadav */
-class CopyAction(context: Context) : BaseEditorAction() {
+class CopyAction(context: Context, override val order: Int) : BaseEditorAction() {
 
   init {
     label = context.getString(R.string.copy)
@@ -33,8 +33,8 @@ class CopyAction(context: Context) : BaseEditorAction() {
     arr.recycle()
   }
 
-  override val id: String = "ideEditor_copy"
-  override fun execAction(data: ActionData): Boolean {
+  override val id: String = "ide.editor.code.text.copy"
+  override suspend fun execAction(data: ActionData): Boolean {
     val editor = getEditor(data) ?: return false
     editor.copyText()
     return true

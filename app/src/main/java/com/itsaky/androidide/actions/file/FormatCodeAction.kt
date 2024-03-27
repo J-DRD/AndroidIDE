@@ -19,18 +19,18 @@ package com.itsaky.androidide.actions.file
 
 import android.content.Context
 import androidx.core.content.ContextCompat
-import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem
 import com.itsaky.androidide.actions.EditorRelatedAction
+import com.itsaky.androidide.resources.R
 
 /**
  * Action that formats the code in the editor.
  *
  * @author Akash Yadav
  */
-class FormatCodeAction(context: Context) : EditorRelatedAction() {
-  override val id: String = "editor_file_formatCode"
+class FormatCodeAction(context: Context, override val order: Int) : EditorRelatedAction() {
+  override val id: String = "ide.editor.code.text.format"
   override var location: ActionItem.Location = ActionItem.Location.EDITOR_TEXT_ACTIONS
 
   init {
@@ -38,8 +38,8 @@ class FormatCodeAction(context: Context) : EditorRelatedAction() {
     icon = ContextCompat.getDrawable(context, R.drawable.ic_format_code)
   }
 
-  override fun execAction(data: ActionData): Any {
-    val editor = getEditor(data)!!
+  override suspend fun execAction(data: ActionData): Any {
+    val editor = data.getEditor()!!
     val cursor = editor.text.cursor
 
     if (cursor.isSelected) {

@@ -18,10 +18,12 @@
 package com.itsaky.androidide.preferences.internal
 
 import androidx.appcompat.app.AppCompatDelegate
+import com.itsaky.androidide.resources.localization.LocaleProvider
 
 const val IS_FIRST_PROJECT_BUILD = "project_isFirstBuild"
 const val UI_MODE = "idepref_general_uiMode"
-const val ENABLE_MATERIAL_YOU = "idpref_general_enableMaterialYou"
+const val SELECTED_THEME = "idpref_general_theme"
+const val SELECTED_LOCALE = "idpref_general_locale"
 const val OPEN_PROJECTS = "idepref_general_autoOpenProjects"
 const val CONFIRM_PROJECT_OPEN = "idepref_general_confirmProjectOpen"
 const val TERMINAL_USE_SYSTEM_SHELL = "idepref_general_terminalShell"
@@ -35,10 +37,25 @@ var uiMode: Int
     prefManager.putInt(UI_MODE, value)
   }
 
-var enableMaterialYou: Boolean
-  get() = prefManager.getBoolean(ENABLE_MATERIAL_YOU, true)
+var selectedTheme: String?
+  get() = prefManager.getString(SELECTED_THEME, null)
   set(value) {
-    prefManager.putBoolean(ENABLE_MATERIAL_YOU, value)
+    prefManager.putString(SELECTED_THEME, value)
+  }
+
+var selectedLocale: String?
+  get() = prefManager.getString(SELECTED_LOCALE, null).let { locale ->
+
+    // if the locale is set to a locale key that is not supported,
+    // fall back to 'System default'
+    if (LocaleProvider.getLocale(locale) == null) {
+      null
+    } else {
+      locale
+    }
+  }
+  set(value) {
+    prefManager.putString(SELECTED_LOCALE, value)
   }
 
 var isFirstBuild: Boolean

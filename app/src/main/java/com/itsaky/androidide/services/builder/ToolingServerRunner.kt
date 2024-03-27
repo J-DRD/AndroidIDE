@@ -17,15 +17,24 @@
 
 package com.itsaky.androidide.services.builder
 
-import com.itsaky.androidide.shell.CommonProcessExecutor
-import com.itsaky.androidide.shell.ProcessStreamsHolder
+import com.itsaky.androidide.shell.executeProcessAsync
+import com.itsaky.androidide.tasks.cancelIfActive
+import com.itsaky.androidide.tasks.ifCancelledOrInterrupted
 import com.itsaky.androidide.tooling.api.IProject
 import com.itsaky.androidide.tooling.api.IToolingApiClient
 import com.itsaky.androidide.tooling.api.IToolingApiServer
 import com.itsaky.androidide.tooling.api.util.ToolingApiLauncher
 import com.itsaky.androidide.utils.Environment
-import com.itsaky.androidide.utils.ILogger
-import java.util.concurrent.CancellationException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import org.slf4j.LoggerFactory
+import java.io.InputStream
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Runner thread for the Tooling API.
@@ -35,28 +44,35 @@ import java.util.concurrent.CancellationException
 internal class ToolingServerRunner(
   private var listener: OnServerStartListener?,
   private var observer: Observer?,
-) : Thread(ToolingServerRunner::class.java.simpleName) {
+) {
 
-  var isStarted = false
-    private set
+  private var _job: Job? = null
+  private var _isStarted = AtomicBoolean(false)
 
-  private val log = ILogger.newInstance("ToolingServerRunner")
+  var isStarted: Boolean
+    get() = _isStarted.get()
+    private set(value) {
+      _isStarted.set(value)
+    }
+
+  private val runnerScope = CoroutineScope(Dispatchers.IO + CoroutineName("ToolingServerRunner"))
+
+  companion object {
+
+    private val log = LoggerFactory.getLogger(ToolingServerRunner::class.java)
+  }
 
   fun setListener(listener: OnServerStartListener?) {
     this.listener = listener
   }
 
-  override fun run() {
+  fun startAsync(envs: Map<String, String>) = runnerScope.launch {
+    var process: Process?
     try {
       log.info("Starting tooling API server...")
-      val serverStreams = ProcessStreamsHolder()
-      val executor = CommonProcessExecutor()
-      executor.execAsync(
-        serverStreams,
-        { observer?.onServerExited(it) },
-        false, // The 'java' binary executable
-        Environment.JAVA
-          .absolutePath, // Allow reflective access to private members of classes in the following
+      val command = listOf(
+        Environment.JAVA.absolutePath, // The 'java' binary executable
+        // Allow reflective access to private members of classes in the following
         // packages:
         // - java.lang
         // - java.io
@@ -70,79 +86,107 @@ internal class ToolingServerRunner(
         // these objects are reflectively accessed by Gson. If we do no specify
         // '--add-opens' for 'java.io' (for java.io.File) package, JVM will throw an
         // InaccessibleObjectException.
-        "--add-opens",
-        "java.base/java.lang=ALL-UNNAMED",
-        "--add-opens",
-        "java.base/java.util=ALL-UNNAMED",
-        "--add-opens",
+        "--add-opens", "java.base/java.lang=ALL-UNNAMED", "--add-opens",
+        "java.base/java.util=ALL-UNNAMED", "--add-opens",
         "java.base/java.io=ALL-UNNAMED", // The JAR file to run
-        "-jar",
-        Environment.TOOLING_API_JAR.absolutePath
+        "-jar", Environment.TOOLING_API_JAR.absolutePath
       )
 
-      val launcher =
-        ToolingApiLauncher.newClientLauncher(
-          observer?.getClient(),
-          serverStreams.`in`,
-          serverStreams.out
-        )
+      process = executeProcessAsync {
+        this.command = command
+
+        // input and output is used for communication to the tooling server
+        // error stream is used to read the server logs
+        this.redirectErrorStream = false
+        this.workingDirectory = null // HOME
+        this.environment = envs
+      }
+
+      val inputStream = process.inputStream
+      val outputStream = process.outputStream
+      val errorStream = process.errorStream
+
+      val processJob = launch(Dispatchers.IO) {
+        try {
+          process?.waitFor()
+          log.info("Tooling API process exited with code : {}", process?.exitValue() ?: "<unknown>")
+          process = null
+        } finally {
+          log.info("Destroying Tooling API process...")
+          process?.destroyForcibly()
+        }
+      }
+
+      val launcher = ToolingApiLauncher.newClientLauncher(
+        observer!!.getClient(),
+        inputStream,
+        outputStream
+      )
 
       val future = launcher.startListening()
       observer?.onListenerStarted(
         server = launcher.remoteProxy as IToolingApiServer,
         projectProxy = launcher.remoteProxy as IProject,
-        streams = serverStreams
+        errorStream = errorStream
       )
 
       isStarted = true
 
-      if (listener != null) {
-        listener!!.onServerStarted()
+      listener?.onServerStarted()
 
-        // we don't need the listener anymore
-        // also, this might be a reference to the activity
-        // release to prevent memory leak
-        listener = null
-      }
+      // we don't need the listener anymore
+      // also, this might be a reference to the activity
+      // release to prevent memory leak
+      listener = null
 
       // Wait(block) until the process terminates
-      try {
-        future.get()
-      } catch (err: Throwable) {
-        when (err) {
-          is CancellationException,
-          is InterruptedException,
-          -> log.info("ToolingServerThread has been cancelled or interrupted.")
-          else -> throw err
+      val serverJob = launch(Dispatchers.IO) {
+        try {
+          future.get()
+        } catch (err: Throwable) {
+          err.ifCancelledOrInterrupted {
+            log.info("ToolingServerThread has been cancelled or interrupted.")
+          }
+
+          // rethrow the error
+          throw err
         }
       }
+
+      processJob.join()
+      joinAll(serverJob, processJob)
     } catch (e: Throwable) {
-      log.error("Unable to start tooling API server", e)
+      if (e !is CancellationException) {
+        log.error("Unable to start tooling API server", e)
+      }
     }
+  }.also {
+    _job = it
   }
 
-  override fun interrupt() {
-    super.interrupt()
-    release()
-  }
-
-  internal fun release() {
+  fun release() {
     this.listener = null
     this.observer = null
+    this._job?.cancel(CancellationException("Cancellation was requested"))
+    this.runnerScope.cancelIfActive("Cancellation was requested")
   }
 
   interface Observer {
+
     fun onListenerStarted(
       server: IToolingApiServer,
       projectProxy: IProject,
-      streams: ProcessStreamsHolder,
+      errorStream: InputStream,
     )
+
     fun onServerExited(exitCode: Int)
+
     fun getClient(): IToolingApiClient
   }
-  
+
   /** Callback to listen for Tooling API server start event.  */
   fun interface OnServerStartListener {
+
     /** Called when the tooling API server has been successfully started.  */
     fun onServerStarted()
   }

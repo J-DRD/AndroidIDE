@@ -17,8 +17,12 @@
 
 package com.itsaky.androidide.services.log
 
+import com.itsaky.androidide.logsender.socket.SenderInfoCommand
 import com.itsaky.androidide.models.LogLine
-import com.itsaky.androidide.utils.ILogger
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import java.net.Socket
 import java.net.SocketException
 
@@ -27,22 +31,32 @@ import java.net.SocketException
  *
  * @author Akash Yadav
  */
-class LogSenderHandler(private val socket: Socket,
-                       internal var consumer: ((LogLine) -> Unit)? = null,
-                       internal var onClose: (LogSenderHandler) -> Unit = {}
-) : Thread("LogSenderHandler"), AutoCloseable {
+class LogSenderHandler(private val sender: SenderInfoCommand, private val socket: Socket,
+  internal var consumer: ((LogLine) -> Unit)? = null,
+  private var onClose: ((String) -> Unit)? = null) : AutoCloseable {
 
-  private val log = ILogger.newInstance("LogSenderHandler")
+  private var manuallyClosed = false
 
-  override fun run() {
+  companion object {
+
+    private val log = LoggerFactory.getLogger(LogSenderHandler::class.java)
+  }
+
+  suspend fun startAsync() = withContext(Dispatchers.IO) {
     try {
       socket.getInputStream().bufferedReader().use { reader ->
         while (!socket.isClosed) {
-          LogLine.forLogString(reader.readLine())?.let { line -> consumer?.invoke(line) }
+          try {
+            LogLine.forLogString(reader.readLine())?.let { line -> consumer?.invoke(line) }
+          } catch (cancellation: CancellationException) {
+            break
+          }
         }
       }
     } catch (err: SocketException) {
-      // ignored
+      if (!manuallyClosed) {
+        log.error("An error occurred while reading from socket", err)
+      }
     } finally {
       close()
     }
@@ -50,13 +64,18 @@ class LogSenderHandler(private val socket: Socket,
 
   override fun close() {
     try {
+      manuallyClosed = true
+
       if (!socket.isClosed) {
+        log.debug("Closing log sender handler...")
         socket.close()
       }
     } catch (err: Throwable) {
       log.error("Failed to close socket", err)
     } finally {
-      onClose(this)
+      onClose?.invoke(this.sender.senderId)
+      this.consumer = null
+      this.onClose = null
     }
   }
 }

@@ -19,27 +19,32 @@ package com.itsaky.androidide.actions.build
 
 import android.content.Context
 import androidx.core.content.ContextCompat
-import com.itsaky.androidide.resources.R
-import com.itsaky.androidide.resources.R.string
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.BaseBuildAction
+import com.itsaky.androidide.resources.R
+import com.itsaky.androidide.resources.R.string
 
 /**
  * Triggers a project sync request.
  *
  * @author Akash Yadav
  */
-class ProjectSyncAction(context: Context) : BaseBuildAction() {
+class ProjectSyncAction(context: Context, override val order: Int) : BaseBuildAction() {
 
-  override val id: String = "action_editor_syncProject"
-  override var requiresUIThread = true
+  override val id: String = "ide.editor.syncProject"
+  override var requiresUIThread = false
 
   init {
     label = context.getString(string.title_sync_project)
     icon = ContextCompat.getDrawable(context, R.drawable.ic_sync)
   }
 
-  override fun execAction(data: ActionData): Any {
-    return data.getActivity()!!.initializeProject()
+  override suspend fun execAction(data: ActionData): Any {
+    return data.requireActivity().saveAll(requestSync = false)
+  }
+
+  override fun postExec(data: ActionData, result: Any) {
+    val activity = data.requireActivity()
+    activity.initializeProject()
   }
 }

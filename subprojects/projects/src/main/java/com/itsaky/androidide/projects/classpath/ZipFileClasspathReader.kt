@@ -19,7 +19,7 @@ package com.itsaky.androidide.projects.classpath
 
 import com.google.common.collect.ImmutableSet
 import java.io.File
-import java.util.zip.*
+import java.util.zip.ZipFile
 
 /**
  * Lists all classes from classpath(s).
@@ -53,8 +53,10 @@ class ZipFileClasspathReader : IClasspathReader {
           if (name.contains('/')) {
             name = name.replace('/', '.')
           }
-        
-          classes.add(ClassInfo.create(name))
+
+          ClassInfo.create(name)?.also { classInfo ->
+            classes.add(classInfo)
+          }
         }
       }
     }

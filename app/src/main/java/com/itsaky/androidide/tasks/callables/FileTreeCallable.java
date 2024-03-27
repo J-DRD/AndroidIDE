@@ -21,10 +21,8 @@
 package com.itsaky.androidide.tasks.callables;
 
 import android.content.Context;
-
 import com.itsaky.androidide.adapters.viewholders.FileTreeViewHolder;
 import com.unnamed.b.atv.model.TreeNode;
-
 import java.io.File;
 import java.io.FileFilter;
 import java.util.Arrays;
@@ -54,7 +52,7 @@ public class FileTreeCallable implements Callable<Boolean> {
     for (File file : files) {
       TreeNode node = new TreeNode(file);
       node.setViewHolder(new FileTreeViewHolder(ctx));
-      parent.addChild(node);
+      parent.addChild(node, false);
     }
   }
 

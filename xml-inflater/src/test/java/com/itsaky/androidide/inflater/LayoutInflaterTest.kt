@@ -29,16 +29,22 @@ import com.itsaky.androidide.inflater.internal.ViewGroupImpl
 import com.itsaky.androidide.inflater.internal.ViewImpl
 import com.itsaky.androidide.inflater.internal.utils.IDTable
 import com.itsaky.androidide.inflater.utils.newAttribute
-import com.itsaky.androidide.projects.ProjectManager
 import com.itsaky.androidide.projects.api.AndroidModule
-import java.io.File
+import com.itsaky.androidide.projects.util.findAppModule
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.File
 
 /** @author Akash Yadav */
 @RunWith(RobolectricTestRunner::class)
 class LayoutInflaterTest {
+
+  @Before
+  fun `setup project`() {
+    XmlInflaterTest.initIfNeeded()
+  }
 
   @Test
   fun `test functionality`() {
@@ -222,7 +228,7 @@ class LayoutInflaterTest {
   }
 
   private fun layoutFile(name: String): File {
-    val app = ProjectManager.app ?: throw IllegalStateException("Project is not initialized")
+    val app = findAppModule() ?: throw IllegalStateException("GradleProject is not initialized")
     return File(app.projectDir, "src/main/res/layout/$name.xml")
   }
 

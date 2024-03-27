@@ -17,15 +17,17 @@
 
 package com.itsaky.androidide.logsender;
 
-import android.app.Application;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.IBinder;
 import android.os.Process;
 import android.os.RemoteException;
+import android.util.Log;
 import com.itsaky.androidide.logsender.utils.LogReader;
 import com.itsaky.androidide.logsender.utils.Logger;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -33,17 +35,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * @author Akash Yadav
  */
-public class LogSender extends ILogSender.Stub implements ServiceConnection {
+public final class LogSender extends ILogSender.Stub implements ServiceConnection {
 
-  private final AtomicBoolean installed = new AtomicBoolean(false);
+  private final AtomicBoolean isBinding = new AtomicBoolean(false);
+  private final AtomicBoolean isConnected = new AtomicBoolean(false);
+
+  private final String senderId;
+
+  private Context context;
 
   private LogReader reader;
 
   private ILogReceiver receiver;
 
   private String packageName;
-
-  public static final LogSender INSTANCE = new LogSender();
 
   /**
    * Action for the LogSender service.
@@ -58,34 +63,10 @@ public class LogSender extends ILogSender.Stub implements ServiceConnection {
   /**
    * AndroidIDE's package name.
    */
-  private static final String PACKAGE_ANDROIDIDE = "com.itsaky.androidide";
+  public static final String PACKAGE_ANDROIDIDE = "com.itsaky.androidide";
 
-  private LogSender() {
-  }
-
-  public static void install(Application app) {
-    INSTANCE.doInstall(app);
-  }
-
-  private void doInstall(Application app) {
-    if (installed.get()) {
-      Logger.warn("LogSender is already installed");
-      return;
-    }
-
-    this.packageName = app.getPackageName();
-    if (PACKAGE_ANDROIDIDE.equals(packageName)) {
-      return;
-    }
-
-    final Intent intent = new Intent(SERVICE_ACTION);
-    intent.setPackage(PACKAGE_ANDROIDIDE);
-    if (app.bindService(intent, this, 0)) {
-      Logger.info("Binding to log receiver");
-      installed.set(true);
-    } else {
-      Logger.error("Failed to bind to log receiver");
-    }
+  LogSender() {
+    this.senderId = UUID.randomUUID().toString();
   }
 
   @Override
@@ -98,6 +79,7 @@ public class LogSender extends ILogSender.Stub implements ServiceConnection {
     try {
       this.receiver.connect(this);
       Logger.info("Connecting to log receiver");
+      this.isConnected.set(true);
     } catch (RemoteException e) {
       Logger.error("Failed to connect to log receiver", e);
       throw new RuntimeException(e);
@@ -106,13 +88,16 @@ public class LogSender extends ILogSender.Stub implements ServiceConnection {
 
   @Override
   public void onServiceDisconnected(ComponentName name) {
-    Logger.info("Disconnected from log receiver");
-    if (this.reader != null) {
-      this.reader.interrupt();
+    tryDisconnect(true);
+    if (this.context != null) {
+      tryUnbind(this.context);
+      this.context = null;
     }
-    this.receiver = null;
-    this.reader = null;
-    this.installed.set(false);
+  }
+
+  @Override
+  public void ping() {
+    Log.d("LogSender", "ping: Received a ping request");
   }
 
   @Override
@@ -122,7 +107,7 @@ public class LogSender extends ILogSender.Stub implements ServiceConnection {
       return;
     }
 
-    reader = new LogReader(port);
+    reader = new LogReader(getId(), getPackageName(), port);
     reader.start();
   }
 
@@ -138,5 +123,127 @@ public class LogSender extends ILogSender.Stub implements ServiceConnection {
     }
 
     return this.packageName;
+  }
+
+  @Override
+  public String getId() {
+    return this.senderId;
+  }
+
+  @Override
+  public void onDisconnect() {
+    tryDisconnect(false);
+    tryUnbind(this.context);
+    try {
+      this.context.stopService(new Intent(this.context, LogSenderService.class));
+    } catch (Exception err) {
+      Logger.error("Failed to stop LogSenderService", err);
+    }
+    this.context = null;
+  }
+
+  /**
+   * @return Whether the log sender is bound to the log receiver service in AndroidIDE.
+   */
+  boolean isBinding() {
+    return isBinding.get();
+  }
+
+  /**
+   * @return Whether the log sender is connected to the service.
+   */
+  boolean isConnected() {
+    return isConnected.get();
+  }
+
+  /**
+   * Binds to the log receiver service in AndroidIDE.
+   *
+   * @param context The context used to bind to the service.
+   * @return Whether the binding was successful or not. This returns <code>true</code> if
+   * {@link Context#bindService(Intent, ServiceConnection, int)} returns true or if the log sender
+   * is already bound to the service. Otherwise <code>false</code> is returned.
+   */
+  boolean bind(Context context) {
+    if (isConnected()) {
+      Logger.warn("LogSender is already installed");
+      return true;
+    }
+
+    if (isBinding()) {
+      Logger.warn("LogSender is already being installed");
+      return true;
+    }
+
+    this.packageName = context.getPackageName();
+    if (PACKAGE_ANDROIDIDE.equals(packageName)) {
+      return false;
+    }
+
+    this.context = context;
+
+    final Intent intent = new Intent(SERVICE_ACTION);
+    intent.setPackage(PACKAGE_ANDROIDIDE);
+    isBinding.set(context.bindService(intent, this, Context.BIND_IMPORTANT | Context.BIND_AUTO_CREATE));
+
+    if (isBinding()) {
+      Logger.info("Binding to log receiver");
+    } else {
+      Logger.error("Failed to bind to log receiver");
+    }
+
+    return isBinding();
+  }
+
+  /**
+   * Disconnects from the log receiver and unbinds from the log receiver service.
+   *
+   * @param context The context used to unbind from the service.
+   */
+  void destroy(Context context) {
+    tryDisconnect(true);
+    tryUnbind(context);
+    this.context = null;
+  }
+
+  private void tryDisconnect(boolean notifyRecevier) {
+    Logger.info("Disconnecting from log receiver...");
+    if (this.reader != null) {
+      this.reader.cancel();
+    }
+
+    if (notifyRecevier && isReceiverAlive(receiver)) {
+      try {
+        receiver.disconnect(getPackageName(), getId());
+      } catch (Exception err) {
+        Logger.error("Failed to disconnect from log receiver service", err);
+      }
+    }
+
+    this.receiver = null;
+    this.reader = null;
+    this.isBinding.set(false);
+    this.isConnected.set(false);
+  }
+
+  private void tryUnbind(Context context) {
+    try {
+      context.unbindService(this);
+    } catch (Exception err) {
+      Logger.error("Failed to unbind from the the log receiver service", err);
+    }
+  }
+
+  private boolean isReceiverAlive(ILogReceiver receiver) {
+    if (receiver == null) {
+      return false;
+    }
+
+    try {
+      receiver.ping();
+      return true;
+    } catch (RemoteException err) {
+      return false;
+    }
   }
 }

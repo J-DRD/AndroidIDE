@@ -29,20 +29,20 @@ import com.itsaky.androidide.tasks.executeAsync
 import com.itsaky.androidide.utils.DialogUtils
 import com.itsaky.androidide.utils.FlashType
 import com.itsaky.androidide.utils.flashMessage
-import java.io.File
 import org.greenrobot.eventbus.EventBus
+import java.io.File
 
 /**
  * File tree action to delete files.
  *
  * @author Akash Yadav
  */
-class DeleteAction(context: Context) :
+class DeleteAction(context: Context, override val order: Int) :
   BaseFileTreeAction(context, labelRes = R.string.delete_file, iconRes = R.drawable.ic_delete) {
 
   override val id: String = "ide.editor.fileTree.delete"
 
-  override fun execAction(data: ActionData) {
+  override suspend fun execAction(data: ActionData) {
     val context = data.requireActivity()
     val file = data.requireFile()
     val lastHeld = data.getTreeNode()

@@ -17,8 +17,35 @@
 
 package com.itsaky.androidide.gradle
 
+import com.itsaky.androidide.buildinfo.BuildInfo
+import com.itsaky.androidide.tooling.api.LogSenderConfig._PROPERTY_IS_TEST_ENV
+import org.gradle.api.Project
+import org.gradle.api.artifacts.Dependency
+import org.gradle.api.artifacts.dsl.DependencyHandler
+
 /**
  * @author Akash Yadav
  */
 
 const val APP_PLUGIN = "com.android.application"
+const val LIBRARY_PLUGIN = "com.android.library"
+
+internal val Project.isTestEnv: Boolean
+  get() = hasProperty(_PROPERTY_IS_TEST_ENV) && property(
+    _PROPERTY_IS_TEST_ENV).toString().toBoolean()
+
+internal fun depVersion(testEnv: Boolean): String {
+  return if (testEnv && !System.getenv("CI").toBoolean()) {
+    BuildInfo.VERSION_NAME_SIMPLE
+  } else {
+    BuildInfo.VERSION_NAME_DOWNLOAD
+  }
+}
+
+fun Project.ideDependency(artifact: String): Dependency {
+  return dependencies.ideDependency(artifact, isTestEnv)
+}
+
+fun DependencyHandler.ideDependency(artifact: String, testEnv: Boolean): Dependency {
+  return create("${BuildInfo.MVN_GROUP_ID}:${artifact}:${depVersion(testEnv)}")
+}

@@ -19,7 +19,6 @@ package com.itsaky.androidide.lsp.java.actions.common
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.hasRequiredData
 import com.itsaky.androidide.actions.markInvisible
-import com.itsaky.androidide.editor.api.IEditor
 import com.itsaky.androidide.editor.api.ILspEditor
 import com.itsaky.androidide.lsp.java.actions.BaseJavaCodeAction
 import com.itsaky.androidide.resources.R
@@ -34,7 +33,7 @@ import java.io.File
 class FindReferencesAction : BaseJavaCodeAction() {
 
   override val titleTextRes: Int = R.string.action_find_references
-  override val id: String = "lsp_java_findReferences"
+  override val id: String = "ide.editor.lsp.java.findReferences"
   override var label: String = ""
   override var requiresUIThread: Boolean = true
 
@@ -47,7 +46,7 @@ class FindReferencesAction : BaseJavaCodeAction() {
     }
   }
 
-  override fun execAction(data: ActionData): Any {
+  override suspend fun execAction(data: ActionData): Any {
     val editor = data[CodeEditor::class.java]!!
     return (editor as? ILspEditor)?.findReferences() ?: false
   }

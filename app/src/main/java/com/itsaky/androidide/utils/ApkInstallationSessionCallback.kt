@@ -20,16 +20,22 @@ package com.itsaky.androidide.utils
 import com.itsaky.androidide.R.string
 import com.itsaky.androidide.activities.editor.BaseEditorActivity
 import com.itsaky.androidide.ui.EditorBottomSheet
+import org.slf4j.LoggerFactory
 
 /** @author Akash Yadav */
 class ApkInstallationSessionCallback(private var activity: BaseEditorActivity?) :
   SingleSessionCallback() {
 
-  private val log = ILogger.newInstance("InstallationSessionCallback")
+  private var sessionId = -1
+
+  companion object {
+    private val log = LoggerFactory.getLogger(ApkInstallationSessionCallback::class.java)
+  }
 
   override fun onCreated(sessionId: Int) {
-    log.debug("on session created:", sessionId)
-    activity?.binding?.apply {
+    this.sessionId = sessionId
+    log.debug("Created package installation session: {}", sessionId)
+    activity?._binding?.apply {
       bottomSheet.setActionText(activity!!.getString(string.msg_installing_apk))
       bottomSheet.setActionProgress(0)
       bottomSheet.showChild(EditorBottomSheet.CHILD_ACTION)
@@ -37,17 +43,17 @@ class ApkInstallationSessionCallback(private var activity: BaseEditorActivity?) 
   }
 
   override fun onProgressChanged(sessionId: Int, progress: Float) {
-    activity?.binding?.bottomSheet?.setActionProgress((progress * 100f).toInt())
+    activity?._binding?.bottomSheet?.setActionProgress((progress * 100f).toInt())
   }
 
   override fun onFinished(sessionId: Int, success: Boolean) {
-    activity?.binding?.apply {
+    activity?._binding?.apply {
       bottomSheet.showChild(EditorBottomSheet.CHILD_HEADER)
       bottomSheet.setActionProgress(0)
       if (!success) {
         activity?.flashError(string.title_installation_failed)
       }
-      
+
       activity?.let {
         it.installationCallback?.destroy()
         it.installationCallback = null
@@ -56,6 +62,19 @@ class ApkInstallationSessionCallback(private var activity: BaseEditorActivity?) 
   }
 
   fun destroy() {
+    if (this.sessionId != -1) {
+      this.activity?.packageManager?.packageInstaller?.let { packageInstaller ->
+        packageInstaller.mySessions.find { session -> session.sessionId == this.sessionId }
+          ?.also { info ->
+            try {
+              packageInstaller.abandonSession(info.sessionId)
+            } catch (ex: Exception) {
+              log.error("Failed to abandon session {} : {}", info.sessionId, ex.cause?.message ?: ex.message)
+            }
+          }
+      }
+    }
     this.activity = null
+    this.sessionId = -1
   }
 }

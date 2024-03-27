@@ -1,3 +1,5 @@
+import com.itsaky.androidide.build.config.BuildConfig
+
 plugins {
     id("com.android.library")
     id("kotlin-android")
@@ -23,16 +25,20 @@ dependencies {
     api(libs.androidide.ts.java)
     api(libs.androidide.ts.json)
     api(libs.androidide.ts.kotlin)
+    api(libs.androidide.ts.log)
     api(libs.androidide.ts.xml)
+    api(libs.androidx.collection)
     api(libs.common.editor)
-    api(libs.common.editor.ts)
     
     api(projects.editorApi)
-    
+    api(projects.editorTreesitter)
+
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.constraintlayout)
-    
+    implementation(libs.androidx.tracing)
+    implementation(libs.androidx.tracing.ktx)
+
     implementation(libs.common.utilcode)
     
     implementation(libs.google.material)

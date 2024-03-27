@@ -31,21 +31,25 @@ import com.itsaky.androidide.lsp.java.rewrite.AddImport
 import com.itsaky.androidide.lsp.java.rewrite.Rewrite
 import com.itsaky.androidide.lsp.models.CodeActionItem
 import com.itsaky.androidide.lsp.models.DiagnosticItem
-import com.itsaky.androidide.projects.ProjectManager
+import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.resources.R
-import com.itsaky.androidide.utils.ILogger
 import jdkx.tools.Diagnostic
 import jdkx.tools.JavaFileObject
+import org.slf4j.LoggerFactory
 
 /** @author Akash Yadav */
 class AddImportAction : BaseJavaCodeAction() {
 
-  override val id: String = "lsp_java_addImport"
+  override val id: String = "ide.editor.lsp.java.diagnostics.addImport"
   override var label: String = ""
   private val diagnosticCode = DiagnosticCode.NOT_IMPORTED.id
-  private val log = ILogger.newInstance("AddImportAction")
 
   override val titleTextRes: Int = R.string.action_import_classes
+
+  companion object {
+
+    private val log = LoggerFactory.getLogger(AddImportAction::class.java)
+  }
 
   override fun prepare(data: ActionData) {
     super.prepare(data)
@@ -63,7 +67,7 @@ class AddImportAction : BaseJavaCodeAction() {
 
     val file = data.requireFile()
     val module =
-      ProjectManager.findModuleForFile(file)
+      IProjectManager.getInstance().findModuleForFile(file, false)
         ?: run {
           markInvisible()
           return
@@ -87,7 +91,7 @@ class AddImportAction : BaseJavaCodeAction() {
     enabled = found
   }
 
-  override fun execAction(data: ActionData): Any {
+  override suspend fun execAction(data: ActionData): Any {
     @Suppress("UNCHECKED_CAST")
     val diagnostic =
       JavaDiagnosticUtils.asUnwrapper(
@@ -95,7 +99,7 @@ class AddImportAction : BaseJavaCodeAction() {
       )!!
     val file = data.requireFile()
     val module =
-      ProjectManager.findModuleForFile(file)
+      IProjectManager.getInstance().findModuleForFile(file, false)
         ?: run {
           markInvisible()
           return Any()
@@ -136,7 +140,7 @@ class AddImportAction : BaseJavaCodeAction() {
 
     val file = data.requireFile()
     val module =
-      ProjectManager.findModuleForFile(file)
+      IProjectManager.getInstance().findModuleForFile(file, false)
         ?: run {
           markInvisible()
           return
@@ -158,9 +162,11 @@ class AddImportAction : BaseJavaCodeAction() {
       0 -> {
         log.warn("No rewrites found. Cannot perform action")
       }
+
       1 -> {
         client.performCodeAction(actions[0])
       }
+
       else -> {
         val builder = newDialogBuilder(data)
         builder.setTitle(label)

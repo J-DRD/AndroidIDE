@@ -15,6 +15,8 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import com.itsaky.androidide.build.config.BuildConfig
+
 plugins {
   id("com.android.library")
   id("kotlin-android")
@@ -25,9 +27,13 @@ android {
 }
 
 dependencies {
+  implementation(libs.common.utilcode)
+
   implementation(libs.androidx.appcompat)
   implementation(libs.androidx.annotation)
-  implementation(libs.androidx.ktx)
+  implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.constraintlayout)
   implementation(libs.google.material)
+
+  implementation(projects.resources)
 }

@@ -17,9 +17,17 @@
 
 package com.itsaky.androidide.gradle
 
-import com.itsaky.androidide.buildinfo.BuildInfo
+import com.android.build.api.component.analytics.AnalyticsEnabledApplicationVariant
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import com.android.build.api.variant.ApplicationVariant
+import com.android.build.api.variant.impl.ApplicationVariantImpl
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.artifacts.Configuration
+import org.gradle.api.artifacts.ExternalDependency
+import org.gradle.api.artifacts.ExternalModuleDependency
+import org.gradle.api.logging.Logging
+import java.util.concurrent.TimeUnit
 
 /**
  * Plugin to manage LogSender in Android applications.
@@ -29,23 +37,81 @@ import org.gradle.api.Project
 class LogSenderPlugin : Plugin<Project> {
 
   companion object {
+
     private const val LOGSENDER_DEPENDENCY_ARTIFACT = "logsender"
-    private const val LOGSENDER_DEPENDENCY =
-      "${BuildInfo.MVN_GROUP_ID}:${LOGSENDER_DEPENDENCY_ARTIFACT}:${BuildInfo.VERSION_NAME_PUBLISHING}"
+
+    private val logger = Logging.getLogger(LogSenderPlugin::class.java)
   }
 
   override fun apply(target: Project) {
+    if (target.isTestEnv) {
+      logger.lifecycle("Applying ${javaClass.simpleName} to project '${target.path}'")
+    }
+
     target.run {
+
       check(plugins.hasPlugin(APP_PLUGIN)) {
         "${javaClass.simpleName} can only be applied to Android application projects."
       }
 
-      val extension = extensions.create("logsender", LogSenderPluginExtension::class.java)
+      (extensions.getByName(
+        "androidComponents") as ApplicationAndroidComponentsExtension).apply {
 
-      configurations
-        .getByName("${extension.variant}RuntimeOnly")
-        .dependencies
-        .add(dependencies.create(LOGSENDER_DEPENDENCY))
+        val debuggableBuilds = hashSetOf<String>()
+
+        beforeVariants { variantBuilder ->
+          logger.info(
+            "Variant :'${variantBuilder.name}' isDebuggable: ${variantBuilder.debuggable}")
+          if (variantBuilder.debuggable) {
+            debuggableBuilds.add(variantBuilder.name)
+          }
+        }
+
+        onVariants { variant ->
+          logger.info(
+            "Found ${debuggableBuilds.size} debuggable builds in project '${project.path}'" +
+                ": $debuggableBuilds"
+          )
+
+          if (debuggableBuilds.isEmpty()) {
+            logger.warn("No debuggable builds found in project '${project.path}'")
+          }
+
+          if (variant.name in debuggableBuilds) {
+            variant.withRuntimeConfiguration {
+
+              val logsenderDependency = project.dependencies.ideDependency(
+                LOGSENDER_DEPENDENCY_ARTIFACT, project.isTestEnv)
+
+              if (logsenderDependency is ExternalModuleDependency) {
+                // a new snapshot is published for each build
+                // therefore, we could mark this dependency as not changing
+                // so that Gradle does not try to download this dependency on each build
+                logger.debug("Marking logsender dependency as not-changing")
+                logsenderDependency.isChanging = false
+              }
+
+              logger.lifecycle(
+                "Adding LogSender dependency (version '${logsenderDependency.version}')" +
+                    " to variant '${variant.name}' of project '${project.path}'"
+              )
+
+              logger.debug("Adding logsender dependency: $logsenderDependency")
+              dependencies.add(logsenderDependency)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private fun ApplicationVariant.withRuntimeConfiguration(
+    action: Configuration.() -> Unit
+  ) {
+    if (this is ApplicationVariantImpl) {
+      variantDependencies.runtimeClasspath.action()
+    } else if (this is AnalyticsEnabledApplicationVariant) {
+      delegate.withRuntimeConfiguration(action)
     }
   }
 }

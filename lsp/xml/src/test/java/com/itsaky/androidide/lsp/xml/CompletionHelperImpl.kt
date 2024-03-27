@@ -19,6 +19,7 @@ package com.itsaky.androidide.lsp.xml
 
 import com.itsaky.androidide.lsp.models.CompletionItem
 import com.itsaky.androidide.lsp.models.CompletionParams
+import com.itsaky.androidide.progress.ICancelChecker
 
 /** @author Akash Yadav */
 class CompletionHelperImpl : CompletionHelper {
@@ -28,7 +29,7 @@ class CompletionHelperImpl : CompletionHelper {
       val result = server.complete(createCompletionParams)
       result.isIncomplete to
         result.items
-          .filter { it.label != null }
+          .filter { it.ideLabel.isNotBlank() }
           .map { transform(it) }
           .filter { it.isNotBlank() }
           .toList()
@@ -38,7 +39,7 @@ class CompletionHelperImpl : CompletionHelper {
   private fun createCompletionParams(): CompletionParams {
     return XMLLSPTest.run {
       val cursor = cursorPosition(true)
-      val completionParams = CompletionParams(cursor, file!!)
+      val completionParams = CompletionParams(cursor, file!!, ICancelChecker.NOOP)
       completionParams.position.index = this.cursor
       completionParams.content = contents
       completionParams

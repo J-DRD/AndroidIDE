@@ -21,9 +21,16 @@ import com.itsaky.androidide.lsp.java.compiler.SourceFileManager;
 import com.itsaky.androidide.lsp.java.compiler.SourceFileObject;
 import com.itsaky.androidide.models.Position;
 import com.itsaky.androidide.models.Range;
-import com.itsaky.androidide.projects.ProjectManager;
+import com.itsaky.androidide.projects.IProjectManager;
 import com.itsaky.androidide.projects.api.ModuleProject;
-import com.itsaky.androidide.utils.ILogger;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import jdkx.tools.JavaCompiler;
+import jdkx.tools.JavaFileObject;
 import openjdk.source.tree.ClassTree;
 import openjdk.source.tree.CompilationUnitTree;
 import openjdk.source.tree.LineMap;
@@ -35,22 +42,14 @@ import openjdk.source.util.SourcePositions;
 import openjdk.source.util.TreePath;
 import openjdk.source.util.Trees;
 import openjdk.tools.javac.api.JavacTool;
-
-import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import jdkx.tools.JavaCompiler;
-import jdkx.tools.JavaFileObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Parser {
 
   private static final JavaCompiler COMPILER = JavacTool.create();
   private static SourceFileManager FILE_MANAGER = SourceFileManager.NO_MODULE;
-  private static final ILogger LOG = ILogger.newInstance("JavaParser");
+  private static final Logger LOG = LoggerFactory.getLogger(Parser.class);
   private static Parser cachedParse;
   private static long cachedModified = -1;
   public final JavaFileObject file;
@@ -75,9 +74,12 @@ public class Parser {
     this.trees = Trees.instance(task);
   }
 
-  /** Create a task that compiles a single file */
+  /**
+   * Create a task that compiles a single file
+   */
   private static JavacTask singleFileTask(JavaFileObject file) {
-    final ModuleProject module = ProjectManager.INSTANCE.findModuleForFile(Paths.get(file.toUri()));
+    final ModuleProject module = IProjectManager.getInstance()
+        .findModuleForFile(Paths.get(file.toUri()));
     if (module != null) {
       FILE_MANAGER = SourceFileManager.forModule(module);
     }
@@ -135,7 +137,7 @@ public class Parser {
 
     // If start is -1, give up
     if (start == -1) {
-      LOG.warn(String.format("Couldn't locate `%s`", path.getLeaf()));
+      LOG.warn("Couldn't locate `{}`", path.getLeaf());
       return Range.NONE;
     }
     // If end is bad, guess based on start
@@ -155,7 +157,7 @@ public class Parser {
       String name = cls.getSimpleName().toString();
       start = indexOf(contents, name, start);
       if (start == -1) {
-        LOG.warn(String.format("Couldn't find identifier `%s` in `%s`", name, path.getLeaf()));
+        LOG.warn("Couldn't find identifier `{}` in `{}`", name, path.getLeaf());
         return Range.NONE;
       }
       end = start + name.length();
@@ -175,7 +177,7 @@ public class Parser {
       }
       start = indexOf(contents, name, start);
       if (start == -1) {
-        LOG.warn(String.format("Couldn't find identifier `%s` in `%s`", name, path.getLeaf()));
+        LOG.warn("Couldn't find identifier `{}` in `{}`", name, path.getLeaf());
         return Range.NONE;
       }
       end = start + name.length();
@@ -192,7 +194,7 @@ public class Parser {
       String name = field.getName().toString();
       start = indexOf(contents, name, start);
       if (start == -1) {
-        LOG.warn(String.format("Couldn't find identifier `%s` in `%s`", name, path.getLeaf()));
+        LOG.warn("Couldn't find identifier `{}` in `{}`", name, path.getLeaf());
         return Range.NONE;
       }
       end = start + name.length();
@@ -202,7 +204,7 @@ public class Parser {
       String name = member.getIdentifier().toString();
       start = indexOf(contents, name, start);
       if (start == -1) {
-        LOG.warn(String.format("Couldn't find identifier `%s` in `%s`", name, path.getLeaf()));
+        LOG.warn("Couldn't find identifier `{}` in `{}`", name, path.getLeaf());
         return Range.NONE;
       }
       end = start + name.length();

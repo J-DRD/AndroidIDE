@@ -17,6 +17,7 @@
 
 package com.itsaky.androidide.inflater
 
+import android.graphics.RectF
 import android.view.View
 
 /**
@@ -51,8 +52,11 @@ interface IView {
    * Add and apply the given attribute to this view.
    *
    * @param attribute The attribute to apply.
+   * @param apply Whether the attribute should be applied to the attribute. If this `false` then the
+   * attribute will be simply added to the attributes list.
+   * @param update Whether the attribute's value should be updated if the attribute is already applied to this view.
    */
-  fun addAttribute(attribute: IAttribute, update: Boolean = false)
+  fun addAttribute(attribute: IAttribute, apply: Boolean = true, update: Boolean = false)
 
   /**
    * Remove the given attribute and update the view accordingly.
@@ -108,6 +112,27 @@ interface IView {
    */
   fun onHighlightStateUpdated(highlight: Boolean)
 
+  /**
+   * Get the bounds of the view.
+   *
+   * @return The bounds of the view.
+   */
+  fun getViewRect(): RectF {
+    return RectF().apply { getViewRect(this) }
+  }
+
+  /**
+   * Get the bounds of the view.
+   *
+   * @return The [RectF] to store the bounds of the view.
+   */
+  fun getViewRect(out: RectF) {
+    out.left = view.left.toFloat()
+    out.top = view.top.toFloat()
+    out.right = out.left + view.width
+    out.bottom = out.top + view.height
+  }
+
   /** Removes this view from its parent view. */
   fun removeFromParent() {
     parent?.removeChild(this)
@@ -159,8 +184,12 @@ interface IView {
   }
 
   open class SingleAttributeChangeListener : AttributeChangeListener {
+
     override fun onAttributeAdded(view: IView, attribute: IAttribute) {}
     override fun onAttributeRemoved(view: IView, attribute: IAttribute) {}
-    override fun onAttributeUpdated(view: IView, attribute: IAttribute, oldValue: String) {}
+    override fun onAttributeUpdated(view: IView, attribute: IAttribute,
+      oldValue: String
+    ) {
+    }
   }
 }

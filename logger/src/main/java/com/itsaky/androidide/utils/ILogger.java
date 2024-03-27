@@ -36,11 +36,11 @@ package com.itsaky.androidide.utils;
 
 import static com.itsaky.androidide.utils.LogUtils.preProcessLogTag;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.itsaky.androidide.buildinfo.BuildInfo;
 import java.util.Map;
-import java.util.Objects;
 import java.util.WeakHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Logger for the IDE.
@@ -52,189 +52,57 @@ import java.util.WeakHashMap;
  */
 public abstract class ILogger {
 
-  public static final String DEFAULT_TAG = "AndroidIDE";
+  public static final Logger ROOT = LoggerFactory.getLogger(BuildInfo.PACKAGE_NAME);
+
   public static final String MSG_SEPARATOR = " "; // Separate messages with a space.
 
-  private static final List<LogListener> logListeners = new ArrayList<>();
-  private static final Map<String, ILogger> cachedLoggers = new WeakHashMap<>();
-
-  private static ILogger instance;
   protected final String TAG;
+
+  protected boolean isEnabled = true;
 
   protected ILogger(String tag) {
     TAG = preProcessLogTag(tag);
   }
 
-  public static ILogger instance() {
-    return cachedLoggers.computeIfAbsent(DEFAULT_TAG, ILogger::createInstance);
-  }
-
-  private static ILogger createInstance(String tag) {
-    return cachedLoggers.computeIfAbsent(tag, ILogger::newPlatformDependentLogger);
-  }
-
-  private static ILogger newPlatformDependentLogger(String tag) {
-    return LogUtils.isJvm() ? new JvmLogger(tag) : new AndroidLogger(tag);
-  }
-
-  public static void addLogListener(LogListener listener) {
-    logListeners.add(Objects.requireNonNull(listener));
-  }
-
-  public static void removeLogListener(LogListener listener) {
-    logListeners.remove(Objects.requireNonNull(listener));
-  }
-
-  public static ILogger newInstance(String tag) {
-    return createInstance(tag);
-  }
-
-  public static Priority priority(char priorityChar) {
-    for (var priority : Priority.values()) {
-      if (priorityChar(priority) == priorityChar) {
-        return priority;
-      }
-    }
-    throw new IllegalArgumentException("Invalid priority character: " + priorityChar);
-  }
-
-  public static char priorityChar(Priority priority) {
-    return Character.toUpperCase(priorityText(priority).charAt(0));
-  }
-
-  public static String priorityText(Priority priority) {
-    return priority.name();
-  }
-
   /**
-   * Log error messages.
-   *
-   * @param messages The messages to log.
-   * @return This logger instance.
+   * Logging level.
    */
-  public ILogger error(Object... messages) {
-    return log(Priority.ERROR, messages);
-  }
+  public enum Level {
 
-  /**
-   * Log messages with the given priority.
-   *
-   * @param priority The priority of the log messages.
-   * @param messages The messages to log.
-   * @return This logger instance.
-   */
-  public ILogger log(Priority priority, Object... messages) {
-    logAndNotify(priority, generateMessage(messages));
-    return this;
-  }
+    DEBUG('D'),
+    WARNING('W'),
+    ERROR('E'),
+    INFO('I'),
+    VERBOSE('V');
 
-  private void logAndNotify(Priority priority, String msg) {
-    doLog(priority, msg);
-    for (final var listener : logListeners) {
-      listener.log(priority, TAG, msg);
-    }
-  }
+    public final char levelChar;
 
-  /**
-   * Log the message to an appropriate stream where the user can see the log messages.
-   *
-   * @param priority The priority for this log message.
-   * @param message The full generated message for this log. Might contain new lines.
-   * @see ILogger.Priority#DEBUG
-   * @see ILogger.Priority#ERROR
-   * @see ILogger.Priority#WARNING
-   * @see ILogger.Priority#VERBOSE
-   * @see ILogger.Priority#INFO
-   */
-  protected abstract void doLog(Priority priority, String message);
-
-  protected String generateMessage(Object... messages) {
-    StringBuilder sb = new StringBuilder();
-    if (messages == null) {
-      return "null";
+    Level(char levelChar) {
+      this.levelChar = levelChar;
     }
 
-    for (Object msg : messages) {
-      sb.append(msg instanceof Throwable ? "\n" : MSG_SEPARATOR);
-      sb.append(msg instanceof Throwable ? LogUtils.getFullStackTrace(((Throwable) msg)) : msg);
-      sb.append(msg instanceof Throwable ? "\n" : MSG_SEPARATOR);
-    }
-
-    return sb.toString();
-  }
-
-  /**
-   * Log warning messages.
-   *
-   * @param messages The messages to log.
-   * @return This logger instance.
-   */
-  public ILogger warn(Object... messages) {
-    return log(Priority.WARNING, messages);
-  }
-
-  /**
-   * Log verbose messages.
-   *
-   * @param messages The messages to log.
-   * @return This logger instance.
-   */
-  public ILogger verbose(Object... messages) {
-    return log(Priority.VERBOSE, messages);
-  }
-
-  /**
-   * Log information messages.
-   *
-   * @param messages The messages to log.
-   * @return This logger instance.
-   */
-  public ILogger info(Object... messages) {
-    return log(Priority.INFO, messages);
-  }
-
-  /** Logs the name of method and class which calls this method. */
-  public void logThis() {
-    debug(getCallerClassDescription());
-  }
-
-  /**
-   * Log debug messages.
-   *
-   * @param messages The messages to log.
-   * @return This logger instance.
-   */
-  public ILogger debug(Object... messages) {
-    return log(Priority.DEBUG, messages);
-  }
-
-  protected String getCallerClassDescription() {
-    final var elements = Thread.currentThread().getStackTrace();
-    for (int i = 1, elementsLength = elements.length; i < elementsLength; i++) {
-      final var element = elements[i];
-      final var klass = element.getClassName();
-      final var method = element.getMethodName();
-      if (ILogger.class.getName().equals(klass) || klass.contains("java.lang.Thread")) {
-        continue;
+    public static Level forChar(char c) {
+      c = Character.toUpperCase(c);
+      if (c == 'T') {
+        // trace
+        return VERBOSE;
       }
 
-      return String.format("%s [%s]", method, klass);
+      for (Level value : values()) {
+        if (value.levelChar == c) {
+          return value;
+        }
+      }
+
+      throw new IllegalArgumentException("Invalid level char " + c);
     }
-
-    return "<Logger> <Cannot get caller information>";
   }
 
-  /** Logging priority. */
-  public enum Priority {
-    DEBUG,
-    WARNING,
-    ERROR,
-    INFO,
-    VERBOSE
-  }
-
-  /** A listener which can be used to listen to log events. */
+  /**
+   * A listener which can be used to listen to log events.
+   */
   public interface LogListener {
-    void log(Priority priority, String tag, String message);
+
+    void log(Level level, String tag, String message);
   }
 }

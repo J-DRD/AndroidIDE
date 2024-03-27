@@ -35,11 +35,11 @@ import com.itsaky.androidide.lsp.java.utils.FindHelper
 import com.itsaky.androidide.lsp.java.utils.JavaParserUtils
 import com.itsaky.androidide.lsp.java.utils.MethodPtr
 import com.itsaky.androidide.lsp.java.visitors.FindTypeDeclarationAt
+import com.itsaky.androidide.models.Position
 import com.itsaky.androidide.preferences.internal.tabSize
 import com.itsaky.androidide.preferences.utils.indentationString
-import com.itsaky.androidide.projects.ProjectManager
+import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.resources.R
-import com.itsaky.androidide.utils.ILogger
 import com.itsaky.androidide.utils.flashError
 import io.github.rosemoe.sora.widget.CodeEditor
 import jdkx.lang.model.element.ElementKind
@@ -51,6 +51,7 @@ import jdkx.lang.model.type.ExecutableType
 import jdkx.tools.JavaFileObject
 import openjdk.source.tree.MethodTree
 import openjdk.source.util.Trees
+import org.slf4j.LoggerFactory
 import java.util.Arrays
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
@@ -61,21 +62,26 @@ import java.util.concurrent.CompletableFuture
  * @author Akash Yadav
  */
 class OverrideSuperclassMethodsAction : BaseJavaCodeAction() {
+
   override val titleTextRes: Int = R.string.action_override_superclass_methods
-  override val id: String = "lsp_java_overrideSuperclassMethods"
+  override val id: String = "ide.editor.lsp.java.generator.overrideSuperclassMethods"
   override var label: String = ""
-  private val log = ILogger.newInstance(javaClass.simpleName)
   private var position: Long = -1
+
+  companion object {
+
+    private val log = LoggerFactory.getLogger(OverrideSuperclassMethodsAction::class.java)
+  }
 
   override fun prepare(data: ActionData) {
     super.prepare(data)
 
     if (
       !visible ||
-        !data.hasRequiredData(
-          com.itsaky.androidide.models.Range::class.java,
-          CodeEditor::class.java
-        )
+      !data.hasRequiredData(
+        com.itsaky.androidide.models.Range::class.java,
+        CodeEditor::class.java
+      )
     ) {
       markInvisible()
       return
@@ -85,10 +91,11 @@ class OverrideSuperclassMethodsAction : BaseJavaCodeAction() {
     enabled = true
   }
 
-  override fun execAction(data: ActionData): Any {
+  override suspend fun execAction(data: ActionData): Any {
     val range = data[com.itsaky.androidide.models.Range::class.java]!!
     val compiler =
-      JavaCompilerProvider.get(ProjectManager.findModuleForFile(data.requireFile()) ?: return Any())
+      JavaCompilerProvider.get(
+        IProjectManager.getInstance().findModuleForFile(data.requireFile(), false) ?: return Any())
     val file = data.requirePath()
 
     return compiler.compile(file).get { task ->
@@ -175,7 +182,8 @@ class OverrideSuperclassMethodsAction : BaseJavaCodeAction() {
       }
 
       CompletableFuture.runAsync { overrideMethods(data, checkedMethods) }
-        .whenComplete { _, error,
+        .whenComplete {
+            _, error,
           ->
           if (error != null) {
             log.error("An error occurred overriding methods")
@@ -194,7 +202,8 @@ class OverrideSuperclassMethodsAction : BaseJavaCodeAction() {
 
   private fun overrideMethods(data: ActionData, checkedMethods: MutableList<MethodPtr>) {
     val compiler =
-      JavaCompilerProvider.get(ProjectManager.findModuleForFile(data.requireFile()) ?: return)
+      JavaCompilerProvider.get(
+        IProjectManager.getInstance().findModuleForFile(data.requireFile(), false) ?: return)
     val file = data.requirePath()
 
     compiler.compile(file).run { task ->
@@ -217,7 +226,7 @@ class OverrideSuperclassMethodsAction : BaseJavaCodeAction() {
             pointer.className,
             pointer.methodName,
             pointer.erasedParameterTypes
-          )
+          ) ?: continue
 
         val thisDeclaredType = thisClass.asType() as DeclaredType
         val executableType = types.asMemberOf(thisDeclaredType, superMethod) as ExecutableType
@@ -257,10 +266,11 @@ class OverrideSuperclassMethodsAction : BaseJavaCodeAction() {
     data: ActionData,
     sb: StringBuilder,
     imports: MutableSet<String>,
-    position: com.itsaky.androidide.models.Position,
+    position: Position,
   ) {
     val compiler =
-      JavaCompilerProvider.get(ProjectManager.findModuleForFile(data.requireFile()) ?: return)
+      JavaCompilerProvider.get(
+        IProjectManager.getInstance().findModuleForFile(data.requireFile(), false) ?: return)
     val editor = data[CodeEditor::class.java]!!
     val file = data.requirePath()
     val text = editor.text

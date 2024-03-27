@@ -19,18 +19,18 @@ package com.itsaky.androidide.actions.editor
 
 import android.content.Context
 import androidx.core.content.ContextCompat
-import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem
 import com.itsaky.androidide.actions.EditorRelatedAction
+import com.itsaky.androidide.resources.R
 
 /**
  * Expands the current selection using the language server set in editor.
  *
  * @author Akash Yadav
  */
-class ExpandSelectionAction(context: Context) : EditorRelatedAction() {
-  override val id: String = "editor_expandSelection"
+class ExpandSelectionAction(context: Context, override val order: Int) : EditorRelatedAction() {
+  override val id: String = "ide.editor.code.actions.expandSelection"
   override var location: ActionItem.Location = ActionItem.Location.EDITOR_TEXT_ACTIONS
 
   init {
@@ -38,7 +38,7 @@ class ExpandSelectionAction(context: Context) : EditorRelatedAction() {
     icon = ContextCompat.getDrawable(context, R.drawable.ic_expand_selection)
   }
 
-  override fun execAction(data: ActionData): Any {
-    return getEditor(data)!!.expandSelection()
+  override suspend fun execAction(data: ActionData): Any {
+    return data.getEditor()?.expandSelection() ?: false
   }
 }

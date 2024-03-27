@@ -16,22 +16,25 @@
  */
 package com.itsaky.androidide.actions.internal
 
-import android.content.Context
-import android.graphics.PorterDuff.Mode.SRC_ATOP
-import android.graphics.PorterDuffColorFilter
 import android.view.Menu
 import android.view.MenuItem
-import com.blankj.utilcode.util.ThreadUtils
 import com.google.auto.service.AutoService
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem
 import com.itsaky.androidide.actions.ActionMenu
 import com.itsaky.androidide.actions.ActionsRegistry
-import com.itsaky.androidide.actions.R
+import com.itsaky.androidide.actions.FillMenuParams
+import com.itsaky.androidide.actions.OnActionClickListener
 import com.itsaky.androidide.actions.locations.CodeActionsMenu
-import com.itsaky.androidide.utils.ILogger
-import com.itsaky.androidide.utils.resolveAttr
-import java.util.concurrent.CompletableFuture
+import com.itsaky.androidide.utils.withStopWatch
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
+import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -42,9 +45,15 @@ import java.util.concurrent.ConcurrentHashMap
 @AutoService(ActionsRegistry::class)
 class DefaultActionsRegistry : ActionsRegistry() {
 
-  private val log = ILogger.newInstance("DefaultActionsRegistry")
-  private val actions = ConcurrentHashMap<String, LinkedHashMap<String, ActionItem>>()
+  private val actions = ConcurrentHashMap<String, ConcurrentHashMap<String, ActionItem>>()
   private val listeners = HashSet<ActionExecListener>()
+
+  private val actionsCoroutineScope = CoroutineScope(Dispatchers.Default) +
+      CoroutineName("DefaultActionsRegistry")
+
+  companion object {
+    private val log = LoggerFactory.getLogger(DefaultActionsRegistry::class.java)
+  }
 
   init {
     registerAction(CodeActionsMenu)
@@ -52,7 +61,7 @@ class DefaultActionsRegistry : ActionsRegistry() {
 
   override fun getActions(location: ActionItem.Location): MutableMap<String, ActionItem> {
     if (actions[location.id] == null) {
-      actions[location.id] = java.util.LinkedHashMap()
+      actions[location.id] = ConcurrentHashMap()
     }
 
     return actions[location.id]!!
@@ -90,6 +99,16 @@ class DefaultActionsRegistry : ActionsRegistry() {
   override fun findAction(location: ActionItem.Location, id: String): ActionItem? =
     getActions(location)[id]
 
+  override fun findAction(location: ActionItem.Location, itemId: Int): ActionItem? {
+    for (action in getActions(location)) {
+      if (action.value.itemId == itemId) {
+        return action.value
+      }
+    }
+
+    return null
+  }
+
   override fun clearActions(location: ActionItem.Location) {
     val actions = getActions(location)
     actions.forEach { it.value.destroy() }
@@ -104,7 +123,8 @@ class DefaultActionsRegistry : ActionsRegistry() {
     listeners.remove(listener)
   }
 
-  override fun fillMenu(data: ActionData, location: ActionItem.Location, menu: Menu) {
+  override fun fillMenu(params: FillMenuParams) {
+    val (data, location, menu, onClickListener) = params
     val actions = getActions(location)
 
     for (action in actions.values) {
@@ -113,20 +133,25 @@ class DefaultActionsRegistry : ActionsRegistry() {
       if (!action.visible) {
         continue
       }
-      addActionToMenu(menu, action, data)
+      addActionToMenu(menu, action, data, onClickListener)
     }
   }
 
-  private fun addActionToMenu(menu: Menu, action: ActionItem, data: ActionData) {
-    val context = data[Context::class.java]
+  private fun addActionToMenu(
+    menu: Menu,
+    action: ActionItem,
+    data: ActionData,
+    onClickListener: OnActionClickListener
+  ) {
+
     val item: MenuItem = if (action is ActionMenu) {
-      val sub = menu.addSubMenu(action.label)
+      val sub = menu.addSubMenu(Menu.NONE, action.itemId, action.order, action.label)
 
       var shouldBeEnabled = false
       for (subItem in action.children) {
         subItem.prepare(data)
         if (subItem.visible) {
-          addActionToMenu(sub, subItem, data)
+          addActionToMenu(sub, subItem, data, onClickListener)
         }
 
         if (action.enabled && subItem.enabled && !shouldBeEnabled) {
@@ -137,65 +162,68 @@ class DefaultActionsRegistry : ActionsRegistry() {
       action.enabled = shouldBeEnabled
       sub.item
     } else {
-      menu.add(action.label)
+      menu.add(Menu.NONE, action.itemId, action.order, action.label)
     }
 
     item.isEnabled = action.enabled
+
     item.icon = action.icon?.apply {
-      colorFilter = PorterDuffColorFilter(context!!.resolveAttr(R.attr.colorOnSurface), SRC_ATOP)
+      colorFilter = action.createColorFilter(data)
+      alpha = if (action.enabled) 255 else 76
     }
 
-    if (item.icon != null) {
-      item.icon!!.alpha = if (action.enabled) 255 else 76
-      item.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
-    } else {
-      item.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+    var showAsAction = action.getShowAsActionFlags(data)
+    if (showAsAction == -1) {
+      showAsAction = if (action.icon != null) {
+        MenuItem.SHOW_AS_ACTION_IF_ROOM
+      } else {
+        MenuItem.SHOW_AS_ACTION_NEVER
+      }
     }
 
-    if (action.getShowAsActionFlags(data) != -1) {
-      item.setShowAsAction(action.getShowAsActionFlags(data))
+    if (!action.enabled) {
+      showAsAction = MenuItem.SHOW_AS_ACTION_NEVER
     }
+
+    item.setShowAsAction(showAsAction)
 
     action.createActionView(data)?.let { item.actionView = it }
 
     if (action !is ActionMenu) {
       item.setOnMenuItemClickListener {
-        executeAction(action, data)
-
-        true
+        onClickListener.onClick(this, action, it, data)
       }
     }
   }
 
   /** Executes the given action item with the given */
-  fun executeAction(action: ActionItem, data: ActionData) {
-    if (action.requiresUIThread) {
-      ThreadUtils.runOnUiThread {
-        val result = action.execAction(data)
+  fun executeAction(action: ActionItem, data: ActionData): Job {
+    val onMainThread = action.requiresUIThread
+    val context = if (onMainThread) Dispatchers.Main.immediate else Dispatchers.Default
+    return actionsCoroutineScope.launch(context) {
+      val result = withStopWatch("Action '${action.id}'") {
+        action.execAction(data)
+      }
+
+      val post = fun() = run {
         action.postExec(data, result)
         notifyActionExec(action, result)
       }
-    } else {
-      execInBackground(action, data)
-    }
-  }
 
-  private fun execInBackground(action: ActionItem, data: ActionData) {
-    val start = System.currentTimeMillis()
-    CompletableFuture.supplyAsync { action.execAction(data) }.whenComplete { result, error ->
-        if (result == null || (result is Boolean && !result) || error != null) {
-          log.error(
-            "An error occurred when performing action '${action.id}'. Action failed in ${System.currentTimeMillis() - start}ms",
-            error)
-        } else {
-          log.info("Action '${action.id}' completed in ${System.currentTimeMillis() - start}ms")
-        }
-
-        ThreadUtils.runOnUiThread {
-          action.postExec(data, result ?: false)
-          notifyActionExec(action, result ?: false)
+      if (onMainThread) {
+        post()
+      } else {
+        withContext(Dispatchers.Main.immediate) {
+          post()
         }
       }
+    }.also { job ->
+      job.invokeOnCompletion { error ->
+        if (error != null) {
+          log.error("An error occurred when performing action '{}'", action.id, error)
+        }
+      }
+    }
   }
 
   private fun notifyActionExec(action: ActionItem, result: Any) {

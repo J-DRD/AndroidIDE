@@ -29,77 +29,82 @@ import com.itsaky.androidide.adapters.TemplateListAdapter
 import com.itsaky.androidide.databinding.FragmentTemplateListBinding
 import com.itsaky.androidide.templates.ITemplateProvider
 import com.itsaky.androidide.templates.ProjectTemplate
+import com.itsaky.androidide.utils.FlexboxUtils
 import com.itsaky.androidide.viewmodel.MainViewModel
-import kotlin.math.ceil
+import org.slf4j.LoggerFactory
 
 /**
  * A fragment to show the list of available templates.
  *
  * @author Akash Yadav
  */
-class TemplateListFragment : FragmentWithBinding<FragmentTemplateListBinding>(
-  R.layout.fragment_template_list, FragmentTemplateListBinding::bind) {
+class TemplateListFragment :
+  FragmentWithBinding<FragmentTemplateListBinding>(R.layout.fragment_template_list,
+    FragmentTemplateListBinding::bind) {
 
   private var adapter: TemplateListAdapter? = null
   private var layoutManager: FlexboxLayoutManager? = null
 
-  private val viewModel by viewModels<MainViewModel>(
-    ownerProducer = { requireActivity() })
+  private lateinit var globalLayoutListener: OnGlobalLayoutListener
+
+  private val viewModel by viewModels<MainViewModel>(ownerProducer = { requireActivity() })
+
+  companion object {
+
+    private val log = LoggerFactory.getLogger(TemplateListFragment::class.java)
+  }
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)
 
-    // Show only project templates
-    val templates = ITemplateProvider.getInstance()
-      .getTemplates()
-      .filterIsInstance<ProjectTemplate>()
+    layoutManager = FlexboxLayoutManager(requireContext(), FlexDirection.ROW)
+    layoutManager!!.justifyContent = JustifyContent.SPACE_EVENLY
 
-    layoutManager =
-      FlexboxLayoutManager(requireContext(), FlexDirection.ROW).apply {
-        justifyContent = JustifyContent.SPACE_EVENLY
+    binding.list.layoutManager = layoutManager
+
+    // This makes sure that the items are evenly distributed in the list
+    // and the last row is always aligned to the start
+    globalLayoutListener = FlexboxUtils.createGlobalLayoutListenerToDistributeFlexboxItemsEvenly(
+      { adapter }, { layoutManager }) { adapter, diff ->
+      adapter.fillDiff(diff)
+    }
+
+    binding.list.viewTreeObserver.addOnGlobalLayoutListener(globalLayoutListener)
+
+    binding.exitButton.setOnClickListener {
+      viewModel.setScreen(MainViewModel.SCREEN_MAIN)
+    }
+
+    viewModel.currentScreen.observe(viewLifecycleOwner) { current ->
+      if (current == MainViewModel.SCREEN_TEMPLATE_DETAILS) {
+        return@observe
       }
+
+      reloadTemplates()
+    }
+  }
+
+  override fun onDestroyView() {
+    binding.list.viewTreeObserver.removeOnGlobalLayoutListener(globalLayoutListener)
+    super.onDestroyView()
+  }
+
+  private fun reloadTemplates() {
+    _binding ?: return
+
+    log.debug("Reloading templates...")
+
+    // Show only project templates
+    // reloading the tempaltes also makes sure that the resources are
+    // released from template parameter widgets
+    val templates = ITemplateProvider.getInstance(reload = true).getTemplates()
+      .filterIsInstance<ProjectTemplate>()
 
     adapter = TemplateListAdapter(templates) { template, _ ->
       viewModel.template.value = template
       viewModel.setScreen(MainViewModel.SCREEN_TEMPLATE_DETAILS)
     }
 
-    binding.list.layoutManager = layoutManager
     binding.list.adapter = adapter
-
-    // This makes sure that the items are evenly distributed in the list
-    // and the last row is always aligned to the start
-    binding.list.viewTreeObserver.addOnGlobalLayoutListener(object :
-      OnGlobalLayoutListener {
-      override fun onGlobalLayout() {
-        binding.list.viewTreeObserver.removeOnGlobalLayoutListener(this)
-
-        val adapter = this@TemplateListFragment.adapter ?: return
-        val layoutManager = this@TemplateListFragment.layoutManager ?: return
-
-        val columns =
-          layoutManager.flexLinesInternal.firstOrNull()?.itemCount ?: 0
-        if (columns == 0) {
-          return
-        }
-
-        val itemCount = adapter.itemCount
-        val rows = ceil(itemCount.toFloat() / columns.toFloat()).toInt()
-        if (itemCount % columns == 0) {
-          return
-        }
-
-        val diff = rows * columns - itemCount
-        if (diff <= 0) {
-          return
-        }
-
-        adapter.fillDiff(diff)
-      }
-    })
-
-    binding.exitButton.setOnClickListener {
-      viewModel.setScreen(MainViewModel.SCREEN_MAIN)
-    }
   }
 }

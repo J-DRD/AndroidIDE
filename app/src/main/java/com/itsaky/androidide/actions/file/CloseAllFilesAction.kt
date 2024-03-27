@@ -19,18 +19,18 @@ package com.itsaky.androidide.actions.file
 
 import android.content.Context
 import androidx.core.content.ContextCompat
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
 import com.itsaky.androidide.R
 import com.itsaky.androidide.actions.ActionData
+import com.itsaky.androidide.activities.editor.EditorHandlerActivity
 
 /**
  * Closes all opened files.
  *
  * @author Akash Yadav
  */
-class CloseAllFilesAction(context: Context) : FileTabAction() {
+class CloseAllFilesAction(context: Context, override val order: Int) : FileTabAction() {
 
-  override val id: String = "ide.editor.closeAllFiles"
+  override val id: String = "ide.editor.fileTab.close.all"
 
   init {
     label = context.getString(R.string.action_closeAll)
@@ -38,7 +38,9 @@ class CloseAllFilesAction(context: Context) : FileTabAction() {
   }
 
   override fun EditorHandlerActivity.doAction(data: ActionData): Boolean {
-    closeAll()
+    closeAll {
+      invalidateOptionsMenu()
+    }
     return true
   }
 }

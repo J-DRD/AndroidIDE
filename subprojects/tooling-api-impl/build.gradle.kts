@@ -15,6 +15,8 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import com.itsaky.androidide.build.config.BuildConfig
+
 @Suppress("JavaPluginLanguageLevel")
 plugins {
   id("com.github.johnrengelman.shadow") version "8.1.1"
@@ -26,17 +28,15 @@ tasks.withType<Jar> {
   manifest { attributes("Main-Class" to "${BuildConfig.packageName}.tooling.impl.Main") }
 }
 
-tasks.register<Copy>("copyJarToAssets") {
-  from(project.file("${project.buildDir}/libs/tooling-api-all.jar"))
-  into(project.rootProject.file("app/src/main/assets/data/common/"))
+tasks.register("deleteExistingJarFiles") {
+  delete {
+    delete(project.layout.buildDirectory.dir("libs"))
+  }
 }
 
-tasks.register("deleteExistingJarFiles") { delete { delete(project.buildDir.resolve("libs")) } }
-
 tasks.register("copyJar") {
-  finalizedBy("copyJarToAssets")
   doLast {
-    val libsDir = project.buildDir.resolve("libs")
+    val libsDir = project.layout.buildDirectory.dir("libs")
 
     copy {
       from(libsDir)
@@ -52,20 +52,22 @@ project.tasks.getByName("jar") {
   finalizedBy("shadowJar")
 }
 
-project.tasks.getByName("shadowJar") { finalizedBy("copyJar") }
+project.tasks.getByName("shadowJar") {
+  finalizedBy("copyJar")
+}
 
 dependencies {
-  implementation(projects.subprojects.toolingApi)
+  api(projects.subprojects.toolingApi)
+
+  implementation(projects.buildInfo)
+  implementation(projects.shared)
 
   implementation(libs.common.jkotlin)
   implementation(libs.xml.xercesImpl)
   implementation(libs.xml.apis)
   implementation(libs.tooling.gradleApi)
 
-  testImplementation(projects.subprojects.toolingApiTesting)
-  testImplementation(projects.shared)
-  testImplementation(libs.tests.junit)
-  testImplementation(libs.tests.google.truth)
+  testImplementation(projects.testing.tooling)
 
   runtimeOnly(libs.tooling.slf4j)
 }

@@ -49,8 +49,7 @@ plugins {
 android {
     namespace = "${data.packageName}"
     compileSdk = ${data.versions.compileSdk.api}
-    buildToolsVersion = "${data.versions.buildTools}"
-
+    
     defaultConfig {
         applicationId = "${data.packageName}"
         minSdk = ${data.versions.minSdk.api}
@@ -76,7 +75,7 @@ android {
     }
 
     buildFeatures {
-        viewBinding = true
+        ${if (!isComposeModule) "viewBinding = true" else ""}
         ${if (isComposeModule) "compose = true" else ""}
     }
     ${if(isComposeModule) composeConfigKts() else ""}
@@ -98,10 +97,9 @@ plugins {
 android {
     namespace '${data.packageName}'
     compileSdk ${data.versions.compileSdk.api}
-    buildToolsVersion "${data.versions.buildTools}"
-
+    
     defaultConfig {
-        applicationId "com.itsaky.myapplication"
+        applicationId "${data.packageName}"
         minSdk ${data.versions.minSdk.api}
         targetSdk ${data.versions.targetSdk.api}
         versionCode 1
@@ -125,7 +123,7 @@ android {
     }
 
     buildFeatures {
-        viewBinding true
+        ${if (!isComposeModule) "viewBinding true" else ""}
         ${if (isComposeModule) "compose true" else ""}
     }
     ${if(isComposeModule) composeConfigGroovy() else ""}

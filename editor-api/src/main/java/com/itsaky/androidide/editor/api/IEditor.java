@@ -19,9 +19,11 @@ package com.itsaky.androidide.editor.api;
 
 import androidx.annotation.NonNull;
 
+import androidx.annotation.Nullable;
 import com.itsaky.androidide.models.Position;
 import com.itsaky.androidide.models.Range;
 
+import io.github.rosemoe.sora.text.CharPosition;
 import java.io.File;
 
 /**
@@ -38,6 +40,7 @@ public interface IEditor {
    *
    * @return The file instance.
    */
+  @Nullable
   File getFile();
 
   /**
@@ -59,7 +62,34 @@ public interface IEditor {
    *
    * @param range The range to select.
    */
-  void setSelection(@NonNull Range range);
+  default void setSelection(@NonNull Range range) {
+    setSelection(range.getStart(), range.getEnd());
+  }
+
+  void setSelection(@NonNull Position start, @NonNull Position end);
+
+  /**
+   * Set selection around the given position.
+   * @param position The position to set selection around.
+   */
+  default void setSelectionAround(CharPosition position) {
+    setSelectionAround(position.getLine(), position.getColumn());
+  }
+
+  /**
+   * Set selection around the given position.
+   * @param position The position to set selection around.
+   */
+  default void setSelectionAround(Position position) {
+    setSelectionAround(position.getLine(), position.getColumn());
+  }
+
+  /**
+   * Set selection around the given position.
+   * @param line The line index.
+   * @param column The column index.
+   */
+  void setSelectionAround(int line, int column);
   
   /**
    * Get the cursor's selection range in the form of {@link Range}.

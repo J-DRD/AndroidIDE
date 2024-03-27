@@ -23,18 +23,18 @@
 ;;; Variables
 
 (function_declaration
-	(parameter
-		(simple_identifier) @definition.parameter))
+    (function_value_parameters
+		  (parameter
+			  (simple_identifier) @definition.parameter)))
 
 (lambda_literal
 	(lambda_parameters
 		(variable_declaration
 			(simple_identifier) @definition.parameter)))
 
-(class_body
-	(property_declaration
+(property_declaration
 		(variable_declaration
-			(simple_identifier) @definition.field)))
+			(simple_identifier) @definition.field))
 
 (class_declaration
 	(primary_constructor

@@ -19,23 +19,26 @@ package com.itsaky.androidide.actions.etc
 
 import android.content.Context
 import androidx.core.content.ContextCompat
-import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorRelatedAction
+import com.itsaky.androidide.resources.R
 
 /** @author Akash Yadav */
 class FindInFileAction() : EditorRelatedAction() {
 
-  override val id: String = "editor_findInFile"
+  override val id: String = "ide.editor.find.inFile"
   override var requiresUIThread: Boolean = true
 
-  constructor(context: Context) : this() {
-    label = context.getString(R.string.menu_find_file)
-    icon = ContextCompat.getDrawable(context, R.drawable.ic_search_file)
+  override var order: Int = 0
+
+  constructor(context: Context, order: Int) : this() {
+    this.label = context.getString(R.string.menu_find_file)
+    this.icon = ContextCompat.getDrawable(context, R.drawable.ic_search_file)
+    this.order = order
   }
 
-  override fun execAction(data: ActionData): Boolean {
-    val editor = getEditorView(data) ?: return false
+  override suspend fun execAction(data: ActionData): Boolean {
+    val editor = data.getEditorView() ?: return false
     editor.beginSearch()
     return true
   }

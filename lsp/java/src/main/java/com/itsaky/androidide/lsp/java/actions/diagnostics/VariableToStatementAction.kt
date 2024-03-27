@@ -22,24 +22,28 @@ import com.itsaky.androidide.actions.markInvisible
 import com.itsaky.androidide.actions.requireFile
 import com.itsaky.androidide.actions.requirePath
 import com.itsaky.androidide.lsp.java.JavaCompilerProvider
-import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.lsp.java.actions.BaseJavaCodeAction
 import com.itsaky.androidide.lsp.java.models.DiagnosticCode
 import com.itsaky.androidide.lsp.java.rewrite.ConvertVariableToStatement
 import com.itsaky.androidide.lsp.java.utils.CodeActionUtils.findPosition
-import com.itsaky.androidide.projects.ProjectManager
-import com.itsaky.androidide.utils.ILogger
+import com.itsaky.androidide.projects.IProjectManager
+import com.itsaky.androidide.resources.R
+import org.slf4j.LoggerFactory
 
 /** @author Akash Yadav */
 class VariableToStatementAction : BaseJavaCodeAction() {
-  override val id: String = "lsp_java_variableToStatement"
+
+  override val id: String = "ide.editor.lsp.java.diagnostics.variableToStatement"
   override var label: String = ""
   private val diagnosticCode = DiagnosticCode.UNUSED_LOCAL.id
-  private val log = ILogger.newInstance(javaClass.simpleName)
 
   override val titleTextRes: Int = R.string.action_convert_to_statement
 
-  @Suppress("UNCHECKED_CAST")
+  companion object {
+
+    private val log = LoggerFactory.getLogger(VariableToStatementAction::class.java)
+  }
+
   override fun prepare(data: ActionData) {
     super.prepare(data)
 
@@ -47,7 +51,7 @@ class VariableToStatementAction : BaseJavaCodeAction() {
       return
     }
 
-    if (!data.hasRequiredData( com.itsaky.androidide.lsp.models.DiagnosticItem::class.java)) {
+    if (!data.hasRequiredData(com.itsaky.androidide.lsp.models.DiagnosticItem::class.java)) {
       markInvisible()
       return
     }
@@ -62,10 +66,11 @@ class VariableToStatementAction : BaseJavaCodeAction() {
     enabled = true
   }
 
-  override fun execAction(data: ActionData): Any {
+  override suspend fun execAction(data: ActionData): Any {
     val diagnostic = data[com.itsaky.androidide.lsp.models.DiagnosticItem::class.java]!!
     val compiler =
-      JavaCompilerProvider.get(ProjectManager.findModuleForFile(data.requireFile()) ?: return Any())
+      JavaCompilerProvider.get(
+        IProjectManager.getInstance().findModuleForFile(data.requireFile(), false) ?: return Any())
     val path = data.requirePath()
 
     return compiler.compile(path).get {

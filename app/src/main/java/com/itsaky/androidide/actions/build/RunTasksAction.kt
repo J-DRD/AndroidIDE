@@ -25,8 +25,8 @@ import com.itsaky.androidide.fragments.RunTasksDialogFragment
 import com.itsaky.androidide.resources.R
 
 /** @author Akash Yadav */
-class RunTasksAction(context: Context) : BaseBuildAction() {
-  override val id: String = "ide.build.runTasks"
+class RunTasksAction(context: Context, override val order: Int) : BaseBuildAction() {
+  override val id: String = "ide.editor.build.runTasks"
   private var dialog: RunTasksDialogFragment? = null
 
   init {
@@ -34,7 +34,7 @@ class RunTasksAction(context: Context) : BaseBuildAction() {
     icon = ContextCompat.getDrawable(context, R.drawable.ic_run_tasks)
   }
 
-  override fun execAction(data: ActionData): Any {
+  override suspend fun execAction(data: ActionData): Any {
     dialog?.dismiss()
     dialog = null
     dialog = RunTasksDialogFragment()

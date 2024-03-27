@@ -24,7 +24,9 @@ plugins {
 dependencies {
     implementation(libs.androidx.annotation)
     implementation(libs.google.guava)
+    implementation(libs.google.gson)
     implementation(projects.logger)
+    implementation(projects.buildInfo)
 
     testImplementation(libs.tests.google.truth)
     testImplementation(libs.tests.junit)

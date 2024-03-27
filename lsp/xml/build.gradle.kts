@@ -15,6 +15,8 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import com.itsaky.androidide.build.config.BuildConfig
+
 plugins {
     id("com.android.library")
     id("kotlin-android")
@@ -46,24 +48,15 @@ dependencies {
     implementation(projects.subprojects.xmlDom)
     implementation(projects.subprojects.xmlUtils)
     
-    implementation(libs.androidx.ktx)
+    implementation(libs.androidx.core.ktx)
     implementation(libs.common.kotlin)
     implementation(libs.google.material)
-    
+
+    testImplementation(projects.actions)
     testImplementation(projects.subprojects.projects)
     testImplementation(projects.subprojects.toolingApi)
-    testImplementation(projects.lsp.testing)
-    testImplementation(projects.common)
-    testImplementation(projects.actions)
-    testImplementation(libs.tests.androidx.test.core)
-    testImplementation(libs.tests.junit)
-    testImplementation(libs.tests.google.truth)
-    testImplementation(libs.tests.robolectric)
-    androidTestImplementation(libs.tests.androidx.junit)
-    androidTestImplementation(libs.tests.androidx.espresso)
-    androidTestImplementation(libs.tests.google.truth)
-    
+    testImplementation(projects.testing.lsp)
+
     compileOnly(projects.common)
-    
     compileOnly(libs.common.antlr4)
 }

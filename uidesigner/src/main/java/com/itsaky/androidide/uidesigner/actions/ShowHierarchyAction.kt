@@ -41,6 +41,7 @@ class ShowHierarchyAction(context: Context) : UiDesignerAction() {
   }
 
   override fun prepare(data: ActionData) {
+    super.prepare(data)
     if (!data.hasRequiredData(Context::class.java, Fragment::class.java)) {
       markInvisible()
       return
@@ -50,7 +51,7 @@ class ShowHierarchyAction(context: Context) : UiDesignerAction() {
     enabled = true
   }
 
-  override fun execAction(data: ActionData): Boolean {
+  override suspend fun execAction(data: ActionData): Boolean {
     data.requireActivity().openHierarchyView()
     return true
   }

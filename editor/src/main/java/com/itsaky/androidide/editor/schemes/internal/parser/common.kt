@@ -17,13 +17,12 @@
 
 package com.itsaky.androidide.editor.schemes.internal.parser
 
-import android.graphics.Color
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonToken.STRING
 import com.itsaky.androidide.editor.schemes.IDEColorScheme
 import com.itsaky.androidide.editor.schemes.LanguageScheme
 import com.itsaky.androidide.editor.schemes.StyleDef
-import com.itsaky.androidide.editor.schemes.internal.parser.SchemeParser.EditorColors
+import com.itsaky.androidide.utils.parseHexColor
 import java.io.File
 
 /** @author Akash Yadav */
@@ -31,8 +30,11 @@ fun IDEColorScheme.parseEditorScheme(reader: JsonReader, resolveFileRef: (String
   val newReader = if (reader.peek() == STRING) {
     readerForFileRef(reader, "editor", resolveFileRef)
   } else reader
-  EditorSchemeParser(newReader).parse(this).also {
-    if (reader != newReader) {
+
+  try {
+    EditorSchemeParser(newReader).parse(this)
+  } finally {
+    if (reader !== newReader) {
       newReader.close()
     }
   }
@@ -48,17 +50,16 @@ fun IDEColorScheme.parseColorValue(value: String?, colorId: Boolean = true): Int
     val refName = value.substring(1)
     val refValue =
       definitions[refName] ?: throw ParseException("Referenced color '$value' not found")
-    return if (colorId) refValue else colorIds[refValue]!!
+    return if (colorId) refValue else colorIds.getOrDefault(refValue, 0)
   }
 
   if (value[0] == '#') {
     val color =
       try {
-        Color.parseColor(value)
+        parseHexColor(value).toInt()
       } catch (err: Throwable) {
-        throw ParseException("Invalid hex color code: '$value'")
+        throw ParseException("Invalid hex color code: '$value'", err)
       }
-
     return if (colorId) putColor(color) else color
   }
 
@@ -95,19 +96,22 @@ fun IDEColorScheme.parseLanguage(
       readerForFileRef(reader, "language", resolveFileRef)
     } else reader
 
-  return LanguageParser(newReader).parseLang(this).also {
-    if (reader != newReader) {
+  return try {
+    LanguageParser(newReader).parseLang(this)
+  } finally {
+    if (reader !== newReader) {
       newReader.close()
     }
   }
 }
 
-private fun readerForFileRef(reader: JsonReader, scheme: String, resolveFileRef: (String) -> File): JsonReader {
+private fun readerForFileRef(reader: JsonReader, scheme: String,
+  resolveFileRef: (String) -> File): JsonReader {
   val value = reader.nextString()
   if (value.length <= 1 || value[0] != '@') {
     throw ParseException("Expected a $scheme scheme file reference but was '$value'")
   }
-  
+
   val langFile = resolveFileRef(value.substring(1))
   if (!langFile.exists() || !langFile.isFile) {
     throw ParseException("Referenced file does not exist or is not a file '$langFile'")
@@ -126,6 +130,7 @@ fun IDEColorScheme.parseStyleDef(reader: JsonReader): StyleDef {
       "italic" -> def.italic = reader.nextBoolean()
       "strikethrough" -> def.strikeThrough = reader.nextBoolean()
       "completion" -> def.completion = reader.nextBoolean()
+      "maybeHexColor" -> def.maybeHexColor = reader.nextBoolean()
     }
   }
   if (def.fg == 0) {

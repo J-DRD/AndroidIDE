@@ -35,14 +35,13 @@
 package com.itsaky.androidide.lsp.api;
 
 import androidx.annotation.NonNull;
-
 import com.itsaky.androidide.lookup.Lookup;
 import com.itsaky.androidide.lsp.models.CompletionItem;
 import com.itsaky.androidide.lsp.models.CompletionParams;
 import com.itsaky.androidide.lsp.models.CompletionResult;
 import com.itsaky.androidide.lsp.models.CompletionsKt;
 import com.itsaky.androidide.lsp.models.MatchLevel;
-
+import com.itsaky.androidide.progress.ICancelChecker;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -59,7 +58,7 @@ public interface ICompletionProvider {
 
   /** Abort the completion process if cancelled. */
   default void abortCompletionIfCancelled() {
-    final var checker = Lookup.getDefault().lookup(ICompletionCancelChecker.class);
+    final var checker = Lookup.getDefault().lookup(ICancelChecker.class);
     if (checker != null) {
       checker.abortIfCancelled();
     }

@@ -20,7 +20,6 @@ package com.itsaky.androidide.uidesigner.actions
 import android.content.Context
 import androidx.core.content.ContextCompat
 import com.itsaky.androidide.actions.ActionData
-import com.itsaky.androidide.actions.hasRequiredData
 import com.itsaky.androidide.uidesigner.R
 
 /**
@@ -38,11 +37,12 @@ class UndoAction(context: Context) : UiDesignerAction() {
   }
   
   override fun prepare(data: ActionData) {
+    super.prepare(data)
     visible = true
     enabled = data.requireWorkspace().undoManager.canUndo()
   }
   
-  override fun execAction(data: ActionData): Any {
+  override suspend fun execAction(data: ActionData): Any {
     data.requireWorkspace().undoManager.undo()
     data.requireActivity().invalidateOptionsMenu()
     return true

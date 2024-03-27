@@ -29,7 +29,7 @@ import com.itsaky.androidide.utils.IntentUtils
  *
  * @author Akash Yadav
  */
-class OpenWithAction(context: Context) :
+class OpenWithAction(context: Context, override val order: Int) :
   BaseFileTreeAction(
     context = context,
     labelRes = R.string.open_with,
@@ -38,7 +38,7 @@ class OpenWithAction(context: Context) :
 
   override val id: String = "ide.editor.fileTree.openWith"
 
-  override fun execAction(data: ActionData) {
+  override suspend fun execAction(data: ActionData) {
     IntentUtils.startIntent(data.requireActivity(), data.requireFile(), "*/*", Intent.ACTION_VIEW)
   }
 }

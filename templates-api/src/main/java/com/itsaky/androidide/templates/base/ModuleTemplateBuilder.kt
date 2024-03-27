@@ -42,14 +42,18 @@ abstract class ModuleTemplateBuilder :
 
   internal val platforms = hashSetOf<Dependency>()
   internal val dependencies = hashSetOf<Dependency>()
-  protected val sourceWriter = SourceWriter()
+
+  @PublishedApi
+  internal val sourceWriter = SourceWriter()
+
+  @PublishedApi
   internal var _name: String? = null
 
   val name: String
     get() = checkNotNull(_name) { "Name not set to module template" }
 
-  protected open fun RecipeExecutor.preConfig() {}
-  protected open fun RecipeExecutor.postConfig() {}
+  open fun RecipeExecutor.preConfig() {}
+  open fun RecipeExecutor.postConfig() {}
 
   /**
    * Get the asset path for base module project template.
@@ -123,7 +127,7 @@ abstract class ModuleTemplateBuilder :
    *
    * @param configure Function for configuring the source files.
    */
-  fun RecipeExecutor.sources(configure: SourceWriter.() -> Unit) {
+  inline fun RecipeExecutor.sources(crossinline configure: SourceWriter.() -> Unit) {
     sourceWriter.apply(configure)
   }
 
@@ -133,8 +137,8 @@ abstract class ModuleTemplateBuilder :
    * @param moduleData  Called after the base configuration is setup and before the [recipe] is executed. Caller can perform its own
    * pre-recipe configuration here. Returns the [ModuleTemplateData] instance.
    */
-  fun commonPreRecipe(extraConfig: TemplateRecipeConfigurator = {},
-                      moduleData: RecipeExecutor.() -> ModuleTemplateData
+  inline fun commonPreRecipe(crossinline extraConfig: TemplateRecipeConfigurator = {},
+                      crossinline moduleData: RecipeExecutor.() -> ModuleTemplateData
   ): TemplateRecipeConfigurator = {
     val data = moduleData()
 
@@ -157,8 +161,7 @@ abstract class ModuleTemplateBuilder :
    * @param extraConfig Called after the [recipe] is executed. Caller can perform its own
    * post-recipe configuration here.
    */
-  fun commonPostRecipe(isComposeModule: Boolean = false,
-                       extraConfig: TemplateRecipeFinalizer = {}
+  fun commonPostRecipe(extraConfig: TemplateRecipeFinalizer = {}
   ): TemplateRecipeFinalizer = {
 
     // Write build.gradle[.kts]
@@ -169,7 +172,9 @@ abstract class ModuleTemplateBuilder :
   }
 
   /**
-   * Add the dependency with the given maven coordinates to this module with the [DependencyConfiguration.Implementation] configuration.
+   * Add the dependency with the given maven coordinates to this module with the
+   * [Implementation][com.itsaky.androidide.templates.base.models.DependencyConfiguration.Implementation]
+   * configuration.
    *
    * @param group The group ID of the dependency.
    * @param artifact The artifact of the dependency.
@@ -177,7 +182,9 @@ abstract class ModuleTemplateBuilder :
    * @param isPlatform Whether this dependency declares a BOM.
    */
   @JvmOverloads
-  fun addDependency(group: String, artifact: String, version: String, isPlatform: Boolean = false) {
+  fun addDependency(group: String, artifact: String, version: String,
+                    isPlatform: Boolean = false
+  ) {
     addDependency(defaultDependency(group, artifact, version), isPlatform)
   }
 
@@ -202,7 +209,7 @@ abstract class ModuleTemplateBuilder :
   abstract fun RecipeExecutor.buildGradle()
 
   override fun buildInternal(): ModuleTemplate {
-    return ModuleTemplate(name, templateName!!, thumb!!, description, widgets!!,
+    return ModuleTemplate(name, templateName!!, thumb!!, widgets!!,
       recipe!!)
   }
 }

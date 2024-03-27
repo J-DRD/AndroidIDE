@@ -17,12 +17,16 @@
 
 package com.itsaky.androidide.models
 
+import com.google.gson.annotations.SerializedName
 import java.nio.file.Path
 
 data class Location(var file: Path, var range: Range)
 
-data class Position @JvmOverloads constructor(var line: Int, var column: Int, var index: Int = -1) :
-  Comparable<Position> {
+data class Position @JvmOverloads constructor(
+  @SerializedName("line") var line: Int,
+  @SerializedName("column") var column: Int,
+  @SerializedName("index") var index: Int = -1
+) : Comparable<Position> {
 
   fun requireIndex(): Int {
     if (index == -1) {
@@ -43,7 +47,9 @@ data class Position @JvmOverloads constructor(var line: Int, var column: Int, va
   }
 
   companion object {
-    @JvmField val NONE = Position(-1, -1)
+
+    @JvmField
+    val NONE = Position(-1, -1)
   }
 
   override fun compareTo(other: Position): Int {
@@ -85,21 +91,26 @@ data class Position @JvmOverloads constructor(var line: Int, var column: Int, va
 
 open class Range
 @JvmOverloads
-constructor(var start: Position = Position(0, 0), var end: Position = Position(0, 0)) :
-  Comparable<Range> {
-  
-  constructor(src: Range) : this(Position(src.start.line, src.start.column), Position(src.end.line, src.end.column))
+constructor(
+  @SerializedName("start") var start: Position = Position(0, 0),
+  @SerializedName("end") var end: Position = Position(0, 0)
+) : Comparable<Range> {
+
+  constructor(src: Range) : this(Position(src.start.line, src.start.column),
+    Position(src.end.line, src.end.column))
 
   companion object {
-    @JvmField val NONE = Range(Position.NONE, Position.NONE)
+
+    @JvmField
+    val NONE = Range(Position.NONE, Position.NONE)
 
     @JvmStatic
-    fun pointRange(line: Int, column: Int) : Range {
+    fun pointRange(line: Int, column: Int): Range {
       return pointRange(Position(line, column))
     }
 
     @JvmStatic
-    fun pointRange(position: Position) : Range {
+    fun pointRange(position: Position): Range {
       return Range(position, position)
     }
   }
@@ -134,7 +145,15 @@ constructor(var start: Position = Position(0, 0), var end: Position = Position(0
   fun compareByEnd(other: Range): Int = end.compareTo(other.end)
 
   fun contains(position: Position): Boolean {
-    return !(position.line < start.line || position.line > end.line)
+    if (position.line < start.line || position.line > end.line) {
+      return false
+    }
+
+    if (start.line == end.line) {
+      return position.column >= start.column && position.column <= end.column
+    }
+
+    return false
   }
 
   /**

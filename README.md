@@ -20,14 +20,17 @@
 <img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License"></p>
 
 <p align="center">
-  <a href="./docs">Explore the docs »</a>
+  <a href="https://androidide.com/docs/">Explore the docs »</a> &nbsp; &nbsp;
+  <a href="https://androidide.com/blogs/">Read our blog »</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/AndroidIDEOfficial/AndroidIDE/issues">Report a bug</a> &nbsp; &#8226; &nbsp;
-  <a href="https://github.com/AndroidIDEOfficial/AndroidIDE/issues">Request a feature</a> &nbsp; &#8226; &nbsp;
+  <a href="https://github.com/AndroidIDEOfficial/AndroidIDE/issues/new?labels=bug&template=BUG.yml&title=%5BBug%5D%3A+">Report a bug</a> &nbsp; &#8226; &nbsp;
+  <a href="https://github.com/AndroidIDEOfficial/AndroidIDE/issues/new?labels=feature&template=FEATURE.yml&title=%5BFeature%5D%3A+">Request a feature</a> &nbsp; &#8226; &nbsp;
   <a href="https://t.me/androidide_discussions">Join us on Telegram</a>
 </p>
+
+> **We are looking for contributors/maintainers to help keep the project alive and speed up the development. You can help by fixing bugs, implementing & improving features, writing documentation, etc.**
 
 ## Features
 
@@ -37,6 +40,7 @@
 - [x] Custom environment variables (for Build & Terminal).
 - [x] SDK Manager (Available via terminal).
 - [x] API information for classes and their members (since, removed, deprecated).
+- [x] Log reader (shows your app's logs in real-time)
 - [ ] Language servers
     - [x] Java
     - [x] XML
@@ -54,20 +58,28 @@
 
 ## Installation
 
+[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.svg"
+    alt="Get it on F-Droid"
+    height="80">](https://f-droid.org/packages/com.itsaky.androidide)
+[<img src="https://github.com/Kunzisoft/Github-badge/raw/main/get-it-on-github.svg"
+    alt="Get it on F-Droid"
+    height="80">](https://github.com/AndroidIDEOfficial/AndroidIDE/releases)
+
 > _Please install AndroidIDE from trusted sources only i.e._
 > - [_The AndroidIDE website_](https://androidide.com)
 > - [_GitHub Releases_](https://github.com/AndroidIDEOfficial/AndroidIDE/releases)
-> - [_GitHub Actions_](https://github.com/AndroidIDEOfficial/AndroidIDE/actions)
+> - [_GitHub Actions_](https://github.com/AndroidIDEOfficial/AndroidIDE/actions?query=branch%3Adev+event%3Apush)
+> - [_F-Droid_](https://f-droid.org/packages/com.itsaky.androidide/)
 
-- Download the AndroidIDE APK from [releases](https://github.com/AndroidIDEOfficial/AndroidIDE/releases). You
-  can also download APKs from [GitHub actions](https://github.com/AndroidIDEOfficial/AndroidIDE/actions).
+- Download the AndroidIDE APK from the mentioned trusted sources.
 - Follow the
-  instructions [here](./docs/installation.md) to
+  instructions [here](https://docs.androidide.com/tutorials/get-started.html) to
   install the build tools.
 
 ## Limitations
 
-- For working with projects in AndroidIDE, your project must use Android Gradle Plugin v7.2.0 or newer. Projects with older AGP must be migrated to newer versions.
+- For working with projects in AndroidIDE, your project must use Android Gradle Plugin v7.2.0 or
+  newer. Projects with older AGP must be migrated to newer versions.
 - SDK Manager is already included in Android SDK and is accessible in AndroidIDE via its Terminal.
   But, you cannot use it to install some tools (like NDK) because those tools are not built for
   Android.
@@ -94,9 +106,16 @@ For translations, visit the [Crowdin project page](https://crowdin.com/project/a
 
 Thanks to all the developers who have contributed to this project.
 
+<p>This project is supported by:</p>
+<p>
+  <a href="https://m.do.co/c/54add371d1d7">
+    <img src="https://opensource.nyc3.cdn.digitaloceanspaces.com/attribution/assets/SVG/DO_Logo_horizontal_blue.svg" width="201px">
+  </a>
+</p>
+
 ## Contact Us
 
-- [Website](https://androidide.com)
+- [Website](https://m.androidide.com)
 - [Telegram](https://t.me/androidide_discussions)
 
 ## License
@@ -116,4 +135,5 @@ You should have received a copy of the GNU General Public License
 along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
 ```
 
-Any violations to the license can be reported either by opening an issue or writing a mail to us directly.
+Any violations to the license can be reported either by opening an issue or writing a mail to us
+directly.

@@ -32,6 +32,7 @@ import androidx.fragment.app.Fragment
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem.Location.UI_DESIGNER_TOOLBAR
 import com.itsaky.androidide.actions.ActionsRegistry
+import com.itsaky.androidide.actions.FillMenuParams
 import com.itsaky.androidide.app.BaseIDEActivity
 import com.itsaky.androidide.uidesigner.actions.clearUiDesignerActions
 import com.itsaky.androidide.uidesigner.actions.registerUiDesignerActions
@@ -39,7 +40,8 @@ import com.itsaky.androidide.uidesigner.databinding.ActivityUiDesignerBinding
 import com.itsaky.androidide.uidesigner.fragments.DesignerWorkspaceFragment
 import com.itsaky.androidide.uidesigner.utils.ViewToXml
 import com.itsaky.androidide.uidesigner.viewmodel.WorkspaceViewModel
-import com.itsaky.androidide.utils.ILogger
+import com.itsaky.androidide.utils.flashError
+import org.slf4j.LoggerFactory
 import java.io.File
 
 /**
@@ -50,7 +52,6 @@ import java.io.File
 class UIDesignerActivity : BaseIDEActivity() {
 
   private var binding: ActivityUiDesignerBinding? = null
-  private val log = ILogger.newInstance("UIDesignerActivity")
   private val viewModel by viewModels<WorkspaceViewModel>()
 
   private val workspace: DesignerWorkspaceFragment?
@@ -66,13 +67,41 @@ class UIDesignerActivity : BaseIDEActivity() {
               return
             }
 
-        if (frag.workspaceView.childCount <= 0) {
-          onFailedToReturnXml("No views have been added")
+        if (viewModel.layoutHasError) {
+          onFailedToReturnXml("Inflation failed, layout has errors.")
+          return
         }
 
-        ViewToXml.generateXml(frag.requireContext(), frag.workspaceView) { onXmlGenerated(it) }
+        if (frag.workspaceView.childCount <= 0) {
+          onFailedToReturnXml("No views have been added")
+          return
+        }
+
+        ViewToXml.generateXml(
+          frag.requireContext(),
+          frag.workspaceView,
+          ::onXmlGenerated
+        ) { result, error ->
+          if (result != null && error == null) {
+            return@generateXml
+          }
+
+          // XML generation failed, notify user and exit activity
+          runOnUiThread {
+            flashError(R.string.msg_generate_xml_failed)
+            onFailedToReturnXml(error?.cause?.message ?: error?.message ?: "Unknown error")
+          }
+        }
       }
     }
+
+  companion object {
+
+    private val log = LoggerFactory.getLogger(UIDesignerActivity::class.java)
+
+    const val EXTRA_FILE = "layout_file"
+    const val RESULT_GENERATED_XML = "ide.uidesigner.generatedXml"
+  }
 
   private fun onXmlGenerated(xml: String) {
     setResult(RESULT_OK, Intent().apply { putExtra(RESULT_GENERATED_XML, xml) })
@@ -80,14 +109,9 @@ class UIDesignerActivity : BaseIDEActivity() {
   }
 
   private fun onFailedToReturnXml(reason: String) {
-    log.error("Failed to generate XML code because '$reason'")
+    log.error("Failed to generate XML code because '{}'", reason)
     setResult(RESULT_CANCELED)
     finish()
-  }
-
-  companion object {
-    const val EXTRA_FILE = "layout_file"
-    const val RESULT_GENERATED_XML = "ide.uidesigner.generatedXml"
   }
 
   override fun bindLayout(): View {
@@ -111,12 +135,12 @@ class UIDesignerActivity : BaseIDEActivity() {
     supportActionBar?.title = viewModel.file.nameWithoutExtension
 
     ActionBarDrawerToggle(
-        this,
-        binding!!.root,
-        binding!!.toolbar,
-        R.string.app_name,
-        R.string.app_name
-      )
+      this,
+      binding!!.root,
+      binding!!.toolbar,
+      R.string.app_name,
+      R.string.app_name
+    )
       .apply {
         binding!!.root.addDrawerListener(this)
         syncState()
@@ -174,7 +198,7 @@ class UIDesignerActivity : BaseIDEActivity() {
     data.put(Context::class.java, this)
     data.put(Fragment::class.java, workspace())
 
-    ActionsRegistry.getInstance().fillMenu(data, UI_DESIGNER_TOOLBAR, menu)
+    ActionsRegistry.getInstance().fillMenu(FillMenuParams(data, UI_DESIGNER_TOOLBAR, menu))
   }
 
   private fun workspace(): DesignerWorkspaceFragment? {

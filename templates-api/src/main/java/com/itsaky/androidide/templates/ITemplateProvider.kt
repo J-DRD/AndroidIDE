@@ -39,15 +39,18 @@ interface ITemplateProvider {
     @JvmStatic
     @JvmOverloads
     fun getInstance(reload: Boolean = false): ITemplateProvider {
-      if (reload) {
-        provider?.clear()
-        provider = null
-      }
 
-      return provider ?: ServiceLoader.load(ITemplateProvider::class.java)
+      return provider?.also { if (reload) it.reload() } ?: ServiceLoader.load(
+        ITemplateProvider::class.java)
         .findFirstOrThrow()
         .also { provider = it }
     }
+
+    /**
+     * @return Whether the [ITemplateProvider] has been loaded or not.
+     */
+    @JvmStatic
+    fun isLoaded() = provider != null
   }
 
   /**
@@ -63,10 +66,15 @@ interface ITemplateProvider {
    * @param templateId The ID for the template.
    * @return The [Template] with the given [templateId] if any, or `null`.
    */
-  fun getTemplate(templateId: String) : Template<*>?
+  fun getTemplate(templateId: String): Template<*>?
+
+  /**
+   * Reloads the templates.
+   */
+  fun reload()
 
   /**
    * Clear all the templates stored in the provider.
    */
-  fun clear()
+  fun release()
 }

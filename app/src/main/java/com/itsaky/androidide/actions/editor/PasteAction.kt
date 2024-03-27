@@ -22,7 +22,7 @@ import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.BaseEditorAction
 
 /** @author Akash Yadav */
-class PasteAction(context: Context) : BaseEditorAction() {
+class PasteAction(context: Context, override val order: Int) : BaseEditorAction() {
 
   init {
     label = context.getString(android.R.string.paste)
@@ -32,7 +32,7 @@ class PasteAction(context: Context) : BaseEditorAction() {
     arr.recycle()
   }
 
-  override val id: String = "ideEditor_paste"
+  override val id: String = "ide.editor.code.text.paste"
 
   override fun prepare(data: ActionData) {
     super.prepare(data)
@@ -45,7 +45,7 @@ class PasteAction(context: Context) : BaseEditorAction() {
     enabled = visible
   }
 
-  override fun execAction(data: ActionData): Boolean {
+  override suspend fun execAction(data: ActionData): Boolean {
     val editor = getEditor(data) ?: return false
     editor.pasteText()
     return true

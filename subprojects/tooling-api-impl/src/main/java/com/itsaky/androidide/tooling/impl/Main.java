@@ -17,41 +17,44 @@
 
 package com.itsaky.androidide.tooling.impl;
 
-import static com.itsaky.androidide.utils.ILogger.newInstance;
-
-import com.itsaky.androidide.models.LogLine;
-import com.itsaky.androidide.tooling.api.IProject;
+import ch.qos.logback.core.CoreConstants;
+import com.itsaky.androidide.logging.JvmStdErrAppender;
 import com.itsaky.androidide.tooling.api.IToolingApiClient;
 import com.itsaky.androidide.tooling.api.util.ToolingApiLauncher;
-import com.itsaky.androidide.tooling.impl.model.InternalForwardingProject;
+import com.itsaky.androidide.tooling.impl.internal.ProjectImpl;
+import com.itsaky.androidide.tooling.impl.logging.ToolingApiAppender;
 import com.itsaky.androidide.tooling.impl.progress.ForwardingProgressListener;
-import com.itsaky.androidide.utils.ILogger;
-import com.itsaky.androidide.utils.JvmLogger;
-
-import org.gradle.tooling.ConfigurableLauncher;
-import org.gradle.tooling.events.OperationType;
-
+import com.itsaky.androidide.tooling.impl.util.LogbackStatusListener;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import org.gradle.tooling.ConfigurableLauncher;
+import org.gradle.tooling.events.OperationType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Main {
-  public static final String MIN_SUPPORTED_AGP_VERSION = "7.2.0";
-  private static final ILogger LOG = newInstance("ToolingApiMain");
+
+  private static final Logger LOG = LoggerFactory.getLogger(Main.class);
   public static IToolingApiClient client;
   public static Future<Void> future;
 
-  static {
-    JvmLogger.interceptor = Main::onLog;
-  }
+  private static ToolingApiAppender toolingApiLogAppender;
 
   public static void main(String[] args) {
+
+    // disable the JVM std.err appender
+    System.setProperty(JvmStdErrAppender.PROP_JVM_STDERR_APPENDER_ENABLED, "false");
+    System.setProperty(CoreConstants.STATUS_LISTENER_CLASS_KEY,
+        LogbackStatusListener.class.getName());
+
     LOG.debug("Starting Tooling API server...");
-    final var project = new InternalForwardingProject(null, IProject.FILE_PATH_NOT_AVAILABLE);
+    final var project = new ProjectImpl();
     final var server = new ToolingApiServerImpl(project);
     final var launcher =
         ToolingApiLauncher.newServerLauncher(server, project, System.in, System.out);
@@ -59,11 +62,43 @@ public class Main {
     Main.client = (IToolingApiClient) launcher.getRemoteProxy();
     server.connect(client);
 
+    Main.toolingApiLogAppender = new ToolingApiAppender(client);
+    Main.toolingApiLogAppender.attachToRoot();
+
     LOG.debug("Server started. Will run until shutdown message is received...");
+    LOG.debug("Running on Java version: {}", System.getProperty("java.version", "<unknown>"));
+
     try {
       Main.future.get();
+    } catch (CancellationException cancellationException) {
+      // ignored
     } catch (InterruptedException | ExecutionException e) {
       LOG.error("An error occurred while waiting for shutdown message", e);
+      if (e instanceof InterruptedException) {
+        // set the interrupt flag
+        Thread.currentThread().interrupt();
+      }
+
+    } finally {
+
+      // Cleanup should be performed in ToolingApiServerImpl.shutdown()
+      // this is to make sure that the daemons are stopped in case the client doesn't call shutdown()
+      try {
+        if (server.isInitialized() || server.isConnected()) {
+          LOG.warn("Connection to tooling server closed without shutting it down!");
+          server.shutdown().get();
+        }
+      } catch (InterruptedException | ExecutionException e) {
+        e.printStackTrace();
+      } finally {
+        Main.future = null;
+        Main.client = null;
+
+        Main.toolingApiLogAppender.detachFromRoot();
+        Main.toolingApiLogAppender = null;
+
+        LOG.info("Tooling API server shutdown complete");
+      }
     }
   }
 
@@ -99,7 +134,9 @@ public class Main {
         args.removeIf(Objects::isNull);
         args.removeIf(String::isBlank);
 
-        LOG.debug("Arguments from tooling client:", args);
+        LOG.debug("Arguments from tooling client: {}", args);
+        launcher.addJvmArguments("-D" + CoreConstants.STATUS_LISTENER_CLASS_KEY + "="
+            + LogbackStatusListener.class.getName());
         launcher.addArguments(args);
       } catch (Throwable e) {
         LOG.error("Unable to get build arguments from tooling client", e);
@@ -107,19 +144,13 @@ public class Main {
     }
   }
 
-  private static void onLog(LogLine line) {
-    if (client != null) {
-      client.logMessage(line);
-    }
-  }
-  
   public static Set<OperationType> progressUpdateTypes() {
     final Set<OperationType> types = new HashSet<>();
-    
+
     // AndroidIDE currently does not handle any other type of events
     types.add(OperationType.TASK);
     types.add(OperationType.PROJECT_CONFIGURATION);
-    
+
     return types;
   }
 }

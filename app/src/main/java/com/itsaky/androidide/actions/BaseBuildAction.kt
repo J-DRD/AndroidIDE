@@ -17,13 +17,8 @@
 
 package com.itsaky.androidide.actions
 
-import android.text.TextUtils
 import com.itsaky.androidide.lookup.Lookup
 import com.itsaky.androidide.projects.builder.BuildService
-import com.itsaky.androidide.tooling.api.messages.result.TaskExecutionResult
-import com.itsaky.androidide.tooling.api.messages.result.TaskExecutionResult.Failure.UNKNOWN
-import com.itsaky.androidide.utils.ILogger
-import com.itsaky.androidide.utils.flashError
 
 /**
  * Marker class for actions that execute build related tasks.
@@ -32,11 +27,11 @@ import com.itsaky.androidide.utils.flashError
  */
 abstract class BaseBuildAction : EditorActivityAction() {
 
-  protected val log: ILogger = ILogger.newInstance(javaClass.simpleName)
   protected val buildService: BuildService?
     get() = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE)
 
   override fun prepare(data: ActionData) {
+    super.prepare(data)
     val context = data.getActivity()
     if (context == null) {
       visible = false
@@ -45,51 +40,6 @@ abstract class BaseBuildAction : EditorActivityAction() {
       visible = true
     }
 
-    if (isBuildInProgress()) {
-      enabled = false
-      return
-    } else {
-      enabled = true
-    }
-  }
-
-  fun shouldPrepare() = visible && enabled
-
-  private fun isBuildInProgress(): Boolean {
-    return buildService == null || buildService?.isBuildInProgress == true
-  }
-
-  @JvmOverloads
-  protected fun execTasks(
-    data: ActionData,
-    resultHandler: (TaskExecutionResult?) -> Unit = {},
-    vararg tasks: String,
-  ) {
-
-    val buildService = this.buildService ?: return
-    if (!buildService.isToolingServerStarted()) {
-      flashError(R.string.msg_tooling_server_unavailable)
-      return
-    }
-
-    val activity =
-      data.getActivity()
-        ?: run {
-          resultHandler(TaskExecutionResult(false, UNKNOWN))
-          return
-        }
-
-    activity.saveAll()
-    activity.runOnUiThread {
-      activity.appendBuildOutput("Executing tasks: " + TextUtils.join(", ", tasks))
-    }
-
-    buildService.executeTasks(tasks = tasks).whenComplete { result, err ->
-      if (result == null || err != null) {
-        log.error("Tasks failed to execute", TextUtils.join(", ", tasks))
-      }
-
-      resultHandler(result)
-    }
+    enabled = buildService?.let { !it.isBuildInProgress } == true
   }
 }

@@ -22,11 +22,10 @@ import com.itsaky.androidide.eventbus.events.editor.DocumentCloseEvent
 import com.itsaky.androidide.eventbus.events.editor.DocumentOpenEvent
 import com.itsaky.androidide.eventbus.events.file.FileDeletionEvent
 import com.itsaky.androidide.eventbus.events.file.FileRenameEvent
-import com.itsaky.androidide.progress.ProcessCancelledException
 import com.itsaky.androidide.progress.ProgressManager
 import com.itsaky.androidide.projects.models.ActiveDocument
-import com.itsaky.androidide.utils.ILogger
 import org.apache.commons.io.FileUtils
+import org.slf4j.LoggerFactory
 import java.io.BufferedReader
 import java.io.InputStream
 import java.net.URI
@@ -35,6 +34,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Instant
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -44,7 +44,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object FileManager {
 
-  private val log = ILogger.newInstance(javaClass.simpleName)
+  private val log = LoggerFactory.getLogger(FileManager::class.java)
   private val activeDocuments = ConcurrentHashMap<Path, ActiveDocument>()
 
   fun isActive(uri: URI): Boolean {
@@ -110,7 +110,7 @@ object FileManager {
       // create document if not already created
       // this should not happen under normal circumstances
       activeDocuments[event.changedFile.normalize()] = createDocument(event)
-      log.warn("Document change event received before open event for file ${event.changedFile}")
+      log.warn("Document change event received before open event for file {}", event.changedFile)
       return
     }
 
@@ -160,7 +160,7 @@ object FileManager {
     } catch (noFile: java.nio.file.NoSuchFileException) {
       log.warn("No such file", noFile)
       "".reader().buffered()
-    } catch (cancelled: ProcessCancelledException) {
+    } catch (cancelled: CancellationException) {
       "".reader().buffered()
     }
   }
@@ -171,7 +171,7 @@ object FileManager {
     } catch (noFile: java.nio.file.NoSuchFileException) {
       log.warn("No such file", noFile)
       "".byteInputStream()
-    } catch (cancelled: ProcessCancelledException) {
+    } catch (cancelled: CancellationException) {
       "".byteInputStream()
     }
   }
@@ -187,7 +187,7 @@ object FileManager {
     } catch (noFile: java.nio.file.NoSuchFileException) {
       log.warn("No such file", noFile)
       ""
-    } catch (cancelled: ProcessCancelledException) {
+    } catch (cancelled: CancellationException) {
       ""
     }
   }
